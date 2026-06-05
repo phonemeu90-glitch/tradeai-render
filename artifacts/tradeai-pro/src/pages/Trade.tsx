@@ -324,7 +324,7 @@ export default function Trade() {
 
         const last = prev[prev.length - 1];
         const first = prev[0];
-        const manipulation = getManipulationFactor(activeAccount) || { shouldWin: false, intensity: 0 };
+        const manipulation = getManipulationFactor(activeAccount, asset.symbol) || { shouldWin: false, intensity: 0 };
 
         const baseVolatility = 0.0010;
         const u1 = Math.random();
