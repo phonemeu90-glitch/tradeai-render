@@ -27,8 +27,11 @@ app.use("/api", router);
 
 // Serve React SPA in production
 const frontendDist = path.resolve(__dirname, "..", "..", "tradeai-pro", "dist");
-app.use(express.static(frontendDist));
+app.use(express.static(frontendDist, { index: false, maxAge: "1y", immutable: true }));
 app.get(/^\/(?!api).*/, (_req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
   res.sendFile(path.join(frontendDist, "index.html"));
 });
 
