@@ -468,8 +468,8 @@ export default function Trade() {
             <div className="space-y-1 text-xs text-white/40">
               <div className="flex justify-between"><span>Tipo</span><span className="text-white/70">{asset.type}</span></div>
               <div className="flex justify-between"><span>Retorno</span><span className="text-green-400 font-semibold">+90%</span></div>
-              {openPos.length > 0 && (
-                <div className="flex justify-between"><span>Posições</span><span className="text-yellow-400 font-semibold">{openPos.length} abertas</span></div>
+              {account.positions.length > 0 && (
+                <div className="flex justify-between"><span>Posições</span><span className="text-yellow-400 font-semibold">{account.positions.length} abertas</span></div>
               )}
             </div>
 
@@ -608,14 +608,14 @@ export default function Trade() {
               </Button>
             </div>
 
-            {/* Posições abertas */}
-            {openPos.length > 0 && (
+            {/* Posições abertas — todos os ativos */}
+            {account.positions.length > 0 && (
               <div className="glass-card rounded-2xl p-4">
                 <h3 className="text-xs font-bold text-white/50 uppercase tracking-wider mb-3">
-                  Posições Abertas ({openPos.length})
+                  Posições Abertas ({account.positions.length})
                 </h3>
                 <div className="space-y-2">
-                  {openPos.map(pos => {
+                  {account.positions.map(pos => {
                     const timeLeft = pos.expiresAt ? Math.max(0, Math.ceil((pos.expiresAt - Date.now()) / 1000)) : 0;
                     return (
                       <div key={pos.id} className="p-3 rounded-xl"
