@@ -521,6 +521,7 @@ export default function Trade() {
               </div>
 
               <ProfessionalChart
+                key={asset.symbol}
                 data={chartData}
                 currentPrice={currentPrice}
                 assetColor={asset.color}
