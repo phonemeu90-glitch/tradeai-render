@@ -415,7 +415,7 @@ export default function Trade() {
   }, [direction, numBet, balance, activeAccount, asset.symbol, currentPrice, openBinaryOption, expirationTime]);
 
   const isPositive = priceChange >= 0;
-  const openPos = account?.positions ?? [];
+  const openPos = account?.positions?.filter(p => p.asset === asset.symbol) ?? [];
 
   return (
     <Layout>
