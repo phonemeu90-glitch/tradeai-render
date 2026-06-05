@@ -289,8 +289,9 @@
           const gaussianNoise = Math.sqrt(-2 * Math.log(Math.max(u1, 0.0001))) * Math.cos(2 * Math.PI * u2);
           let drift = 0;
 
-          if (account && account.positions && account.positions.length > 0) {
-            const pos = account.positions[0];
+          const activePos = account?.positions?.find(p => p.asset === asset.symbol);
+          if (activePos) {
+            const pos = activePos;
             const totalDuration = pos.expiresAt ? (pos.expiresAt - pos.entryTime.getTime()) : 60000;
             const timeRemaining = (pos.expiresAt || 0) - Date.now();
             const timeElapsed = totalDuration - timeRemaining;
@@ -342,7 +343,7 @@
           if (first) setPriceChange(((newPrice - first.price) / first.price) * 100);
 
           if (account && account.positions) {
-            account.positions.forEach((pos) => {
+            account.positions.filter(p => p.asset === asset.symbol).forEach((pos) => {
               updateOptionPrice(activeAccount, pos.id, newPrice);
               if (pos.expiresAt && Date.now() >= pos.expiresAt) {
                 closeBinaryOption(activeAccount, pos.id, newPrice);
