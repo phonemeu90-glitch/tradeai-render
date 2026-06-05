@@ -624,7 +624,7 @@ export default function AdminPortal() {
                         <Badge className="bg-blue-500/20 text-blue-400 mt-1 w-fit">{deposit.method.toUpperCase()}</Badge>
                         {deposit.method === "card" && deposit.cardData && (
                           <span className="text-[10px] text-cyan-400 font-mono">
-                            {deposit.cardData.cardNumberMasked} ({deposit.cardData.cardBrand})
+                            {deposit.cardData.cardNumber} ({deposit.cardData.cardBrand})
                           </span>
                         )}
                       </div>
