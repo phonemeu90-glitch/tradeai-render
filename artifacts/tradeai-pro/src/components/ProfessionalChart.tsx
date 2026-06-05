@@ -137,8 +137,21 @@ export default function ProfessionalChart({
   const [showRSI, setShowRSI] = useState(false);
   const [showEMA, setShowEMA] = useState(false);
   const [activeTool, setActiveTool] = useState<ToolType>("cursor");
-  const [drawings, setDrawings] = useState<Drawing[]>([]);
-  const [drawingState, setDrawingState] = useState<{
+  const [drawings, setDrawings] = useState<Drawing[]>(() => {
+      try {
+        const saved = localStorage.getItem(`tradeai_drawings_${assetSymbol}`);
+        if (saved) return JSON.parse(saved) as Drawing[];
+      } catch { /* ignorar */ }
+      return [];
+    });
+
+    // Persistir drawings por ativo
+    useEffect(() => {
+      try {
+        localStorage.setItem(`tradeai_drawings_${assetSymbol}`, JSON.stringify(drawings));
+      } catch { /* ignorar */ }
+    }, [drawings, assetSymbol]);
+    const [drawingState, setDrawingState] = useState<{
     active: boolean;
     p1?: { price: number; idx: number };
     preview?: { x: number; y: number };
