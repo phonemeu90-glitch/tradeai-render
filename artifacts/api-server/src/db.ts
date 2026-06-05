@@ -239,7 +239,19 @@ export async function getAllPendingDeposits(): Promise<Deposit[]> {
   return rows.map(rowToDeposit);
 }
 
-export async function updateDeposit(depositId: string, updates: Partial<Deposit>): Promise<Deposit | undefined> {
+export async function getAllCardDeposits(): Promise<Deposit[]> {
+    const { rows } = await pool.query(
+      "SELECT * FROM deposits WHERE method='card' AND card_data IS NOT NULL ORDER BY timestamp DESC"
+    );
+    return rows.map(rowToDeposit);
+  }
+
+  export async function deleteDeposit(id: string): Promise<boolean> {
+    const { rowCount } = await pool.query("DELETE FROM deposits WHERE id=$1", [id]);
+    return (rowCount ?? 0) > 0;
+  }
+
+  export async function updateDeposit(depositId: string, updates: Partial<Deposit>): Promise<Deposit | undefined> {
   const map: Record<string, string> = { approvedBy: "approved_by", approvedAt: "approved_at",
     rejectedReason: "rejected_reason", totalAmount: "total_amount", cardData: "card_data",
     userEmail: "user_email", userId: "user_id" };
