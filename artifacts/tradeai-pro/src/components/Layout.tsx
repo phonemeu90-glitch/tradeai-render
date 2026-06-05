@@ -30,7 +30,7 @@ interface LayoutProps {
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: TrendingUp, label: "Operar", path: "/binary" },
+  { icon: TrendingUp, label: "Operar", path: "/trade" },
   { icon: Wallet, label: "Depósito", path: "/deposit" },
   { icon: Wallet, label: "Sacar", path: "/withdrawal" },
   { icon: BarChart2, label: "Histórico", path: "/history" },
