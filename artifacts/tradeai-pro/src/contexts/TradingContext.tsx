@@ -3,6 +3,7 @@
  */
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode, useRef } from "react";
 import { useAuth } from "./AuthContext";
+import { toast } from "sonner";
 
 export interface BinaryOption {
   id: string;
@@ -217,6 +218,125 @@ export function TradingProvider({ children }: { children: ReactNode }) {
       },
     }));
   }, []);
+
+  // ── Refs para evitar stale closures no monitor global ──────────────────────
+  const accountsRef = useRef(accounts);
+  useEffect(() => { accountsRef.current = accounts; }, [accounts]);
+
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
+
+  const updateBalanceRef = useRef(updateBalance);
+  useEffect(() => { updateBalanceRef.current = updateBalance; }, [updateBalance]);
+
+  const updatePnLRef = useRef(updatePnL);
+  useEffect(() => { updatePnLRef.current = updatePnL; }, [updatePnL]);
+
+  // ── Monitor global: fecha posições expiradas de QUALQUER ativo ─────────────
+  // Roda independente de qual gráfico está visível. Usa pos.currentPrice
+  // (último preço conhecido enquanto o gráfico estava ativo) como preço de saída.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const currentUser = userRef.current;
+      if (!currentUser) return;
+
+      const closedIds = new Set<string>();
+
+      setAccounts((prev) => {
+        let changed = false;
+        const next = { real: { ...prev.real }, demo: { ...prev.demo } };
+
+        (["real", "demo"] as const).forEach((accountType) => {
+          const acc = prev[accountType];
+          const expired = acc.positions.filter(
+            (p) => p.status === "open" && p.expiresAt && now >= p.expiresAt
+          );
+          if (expired.length === 0) return;
+
+          changed = true;
+          let newBalance = acc.balance;
+          let newPnL = acc.totalPnL;
+          const newClosed: BinaryOption[] = [];
+
+          expired.forEach((pos) => {
+            if (closedIds.has(pos.id)) return;
+            closedIds.add(pos.id);
+
+            const exitPrice = pos.currentPrice && pos.currentPrice !== pos.entryPrice
+              ? pos.currentPrice
+              : pos.entryPrice;
+
+            const result =
+              (pos.type === "call" && exitPrice > pos.entryPrice) ||
+              (pos.type === "put" && exitPrice < pos.entryPrice)
+                ? "win"
+                : "loss";
+
+            const payout = result === "win" ? pos.betAmount * (1 + PAYOUT_PERCENTAGE) : 0;
+            const pnlChange = result === "win" ? payout - pos.betAmount : -pos.betAmount;
+
+            newBalance += payout;
+            newPnL += pnlChange;
+
+            // Persistir no servidor
+            const currentBalance = accountType === "real" ? currentUser.realBalance : currentUser.demoBalance;
+            const currentPnL = accountType === "real" ? currentUser.realPnL : currentUser.demoPnL;
+            updateBalanceRef.current(accountType, currentBalance + payout);
+            updatePnLRef.current(accountType, currentPnL + pnlChange);
+
+            // Salvar no histórico local
+            try {
+              const histKey = `tradeai_history_${currentUser.id}`;
+              const hist = JSON.parse(localStorage.getItem(histKey) || "[]");
+              hist.unshift({
+                id: `tx_${Date.now()}_${pos.id}`,
+                userId: currentUser.id,
+                type: pos.type,
+                accountType,
+                asset: pos.asset,
+                betAmount: pos.betAmount,
+                entryPrice: pos.entryPrice,
+                exitPrice,
+                result,
+                payout,
+                createdAt: new Date().toISOString(),
+              });
+              localStorage.setItem(histKey, JSON.stringify(hist.slice(0, 200)));
+            } catch { /* ignorar */ }
+
+            // Toast com nome do ativo
+            if (result === "win") {
+              toast.success(`✅ VITÓRIA! ${pos.asset} +R$ ${(pos.betAmount * PAYOUT_PERCENTAGE).toFixed(2)}`);
+            } else {
+              toast.error(`❌ DERROTA! ${pos.asset} -R$ ${pos.betAmount.toFixed(2)}`);
+            }
+
+            newClosed.push({
+              ...pos,
+              status: "closed",
+              exitPrice,
+              exitTime: new Date(),
+              result,
+              payout,
+            });
+          });
+
+          next[accountType] = {
+            ...acc,
+            balance: newBalance,
+            totalPnL: newPnL,
+            positions: acc.positions.filter((p) => !closedIds.has(p.id)),
+            closedPositions: [...acc.closedPositions, ...newClosed],
+          };
+        });
+
+        return changed ? next : prev;
+      });
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, []); // sem deps — usa refs para tudo
 
   const updatePositionPrice = useCallback((account: "real" | "demo", positionId: string, price: number) => {
     updateOptionPrice(account, positionId, price);
