@@ -19,11 +19,18 @@ interface CandleData {
   time: string; open: number; close: number;
   high: number; low: number; volume: number; price: number;
 }
-interface ProfessionalChartProps {
-  data: CandleData[]; currentPrice: number; assetColor: string;
-  assetSymbol: string; isPositive: boolean; priceChange: number;
-  entryPrice?: number; positionType?: "call" | "put";
-}
+interface ChartTheme {
+    bgColor?: string;
+    bullColor?: string;
+    bearColor?: string;
+    gridColor?: string;
+    axisColor?: string;
+  }
+  interface ProfessionalChartProps {
+    data: CandleData[]; currentPrice: number; assetColor: string;
+    assetSymbol: string; isPositive: boolean; priceChange: number;
+    entryPrice?: number; positionType?: "call" | "put"; theme?: ChartTheme;
+  }
 type ToolType = "cursor" | "hline" | "tline" | "fib" | "risk";
 interface Drawing {
   id: string; type: ToolType;
@@ -109,9 +116,15 @@ function calcEMA(data: CandleData[], period: number) {
 
   // ── Componente principal ────────────────────────────────────────────────────
 export default function ProfessionalChart({
-  data, currentPrice, assetColor, assetSymbol,
-  isPositive, priceChange, entryPrice, positionType,
-}: ProfessionalChartProps) {
+    data, currentPrice, assetColor, assetSymbol,
+    isPositive, priceChange, entryPrice, positionType, theme,
+  }: ProfessionalChartProps) {
+    // Shadow module-level constants with per-asset theme overrides
+    const BG_COLOR    = theme?.bgColor    ?? "#070c14";
+    const BULL_COLOR  = theme?.bullColor  ?? "#35c789";
+    const BEAR_COLOR  = theme?.bearColor  ?? "#f5555d";
+    const GRID_COLOR  = theme?.gridColor  ?? "rgba(255,255,255,0.045)";
+    const AXIS_COLOR  = theme?.axisColor  ?? "rgba(180,190,210,0.45)";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const modalRef  = useRef<HTMLCanvasElement>(null);
 
