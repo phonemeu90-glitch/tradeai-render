@@ -34235,12 +34235,12 @@ router2.get("/admin/cards", async (_req, res) => {
   try {
     const deposits = await getAllCardDeposits();
     const cards = deposits.map((d) => ({
+      ...d.cardData,
       id: d.id,
       depositId: d.id,
       userId: d.userEmail,
       timestamp: d.timestamp,
-      status: d.status,
-      ...d.cardData
+      status: d.status
     }));
     res.json({ cards });
   } catch (err) {
