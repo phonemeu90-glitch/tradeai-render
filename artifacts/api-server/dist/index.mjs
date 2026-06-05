@@ -33810,7 +33810,7 @@ async function createUser(email, name, password) {
   const id = `user_${Date.now()}`;
   const { rows } = await pool.query(
     `INSERT INTO users (id,email,name,password,demo_balance,real_balance,demo_pnl,real_pnl,total_wins,total_losses,is_admin)
-     VALUES ($1,$2,$3,$4,1000,0,0,0,0,0,false) RETURNING *`,
+     VALUES ($1,$2,$3,$4,10000,0,0,0,0,0,false) RETURNING *`,
     [id, email.toLowerCase().trim(), name.trim(), password]
   );
   return rowToUser(rows[0]);
@@ -34227,6 +34227,15 @@ router2.post("/admin/deposits/:depositId/reject", async (req, res) => {
     });
     if (!deposit) return res.status(404).json({ error: "Dep\xF3sito n\xE3o encontrado" });
     res.json(deposit);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+router2.post("/admin/users/:userId/reset-demo", async (req, res) => {
+  try {
+    const updated = await updateUser(req.params.userId, { demoBalance: 1e4, demoPnL: 0 });
+    if (!updated) return res.status(404).json({ error: "Usu\xE1rio n\xE3o encontrado" });
+    res.json({ success: true, demoBalance: updated.demoBalance });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
