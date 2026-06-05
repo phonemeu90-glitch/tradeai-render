@@ -283,7 +283,7 @@
           if (!prev || prev.length === 0) return prev;
           const last = prev[prev.length - 1];
           const first = prev[0];
-          const manipulation = getManipulationFactor(activeAccount) || { shouldWin: false, intensity: 0 };
+          const manipulation = getManipulationFactor(activeAccount, asset.symbol) || { shouldWin: false, intensity: 0 };
           const baseVolatility = 0.0010;
           const u1 = Math.random(), u2 = Math.random();
           const gaussianNoise = Math.sqrt(-2 * Math.log(Math.max(u1, 0.0001))) * Math.cos(2 * Math.PI * u2);
