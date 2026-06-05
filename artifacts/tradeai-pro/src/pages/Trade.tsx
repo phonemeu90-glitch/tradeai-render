@@ -64,11 +64,21 @@ export default function Trade() {
     return Number.isNaN(idx) || idx >= ASSETS.length ? 0 : idx;
   });
   const [chartData, setChartData] = useState(() => {
-    const saved = localStorage.getItem("tradeai_trade_asset");
-    const idx = saved ? parseInt(saved, 10) : 0;
-    const safeIdx = Number.isNaN(idx) || idx >= ASSETS.length ? 0 : idx;
-    return generatePriceData(80, ASSETS[safeIdx].startPrice);
-  });
+      const saved = localStorage.getItem("tradeai_trade_asset");
+      const idx = saved ? parseInt(saved, 10) : 0;
+      const safeIdx = Number.isNaN(idx) || idx >= ASSETS.length ? 0 : idx;
+      const sym = ASSETS[safeIdx].symbol;
+      try {
+        const storedRaw = localStorage.getItem(`tradeai_chart_v2_${sym}`);
+        if (storedRaw) {
+          const stored = JSON.parse(storedRaw);
+          if (stored.symbol === sym && stored.data?.length > 0 && Date.now() - stored.savedAt < 600000) {
+            return stored.data;
+          }
+        }
+      } catch { /* ignorar */ }
+      return generatePriceData(80, ASSETS[safeIdx].startPrice);
+    });
   const [currentPrice, setCurrentPrice] = useState(() => {
     const saved = localStorage.getItem("tradeai_trade_asset");
     const idx = saved ? parseInt(saved, 10) : 0;
@@ -81,6 +91,8 @@ export default function Trade() {
   const [expirationTime, setExpirationTime] = useState(60);
 
   const seededRef = useRef(false);
+    const saveCounterRef = useRef(0);
+    const CHART_STORAGE_KEY = (symbol: string) => `tradeai_chart_v2_${symbol}`;
 
   const asset = ASSETS[selectedAsset] || ASSETS[0];
   const balance = getAccountBalance(activeAccount) || 0;
@@ -91,10 +103,23 @@ export default function Trade() {
   // Ao trocar ativo: reseta state e flag de seed
   useEffect(() => {
     seededRef.current = false;
-    const fallback = generatePriceData(80, asset.startPrice);
-    setChartData(fallback);
-    setCurrentPrice(asset.startPrice);
-    setPriceChange(0);
+      saveCounterRef.current = 0;
+      try {
+        const storedRaw = localStorage.getItem(`tradeai_chart_v2_${asset.symbol}`);
+        if (storedRaw) {
+          const stored = JSON.parse(storedRaw);
+          if (stored.symbol === asset.symbol && stored.data?.length > 0 && Date.now() - stored.savedAt < 600000) {
+            setChartData(stored.data);
+            setCurrentPrice(stored.data[stored.data.length - 1].price);
+            setPriceChange(0);
+            return;
+          }
+        }
+      } catch { /* ignorar */ }
+      const fallback = generatePriceData(80, asset.startPrice);
+      setChartData(fallback);
+      setCurrentPrice(asset.startPrice);
+      setPriceChange(0);
   }, [asset.symbol, asset.startPrice]);
 
   // Quando dados do servidor chegam: override com histórico persistente (apenas 1x por ativo)
@@ -169,9 +194,21 @@ export default function Trade() {
         };
 
         const appended = [...prev, newPoint];
-        const updated = appended.length > 2000 ? appended.slice(-2000) : appended;
+          const updated = appended.length > 2000 ? appended.slice(-2000) : appended;
 
-        setCurrentPrice(newPrice);
+          // Persistir gráfico no localStorage a cada 30 segundos
+          saveCounterRef.current++;
+          if (saveCounterRef.current % 30 === 0) {
+            try {
+              localStorage.setItem(`tradeai_chart_v2_${asset.symbol}`, JSON.stringify({
+                symbol: asset.symbol,
+                data: updated.slice(-300),
+                savedAt: Date.now(),
+              }));
+            } catch { /* ignorar */ }
+          }
+
+          setCurrentPrice(newPrice);
         if (first) {
           setPriceChange(((newPrice - first.price) / first.price) * 100);
         }
