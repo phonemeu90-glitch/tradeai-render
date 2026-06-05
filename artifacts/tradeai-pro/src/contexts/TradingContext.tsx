@@ -67,10 +67,25 @@ export function TradingProvider({ children }: { children: ReactNode }) {
     return saved === "real" || saved === "demo" ? saved : "demo";
   });
 
-  const [accounts, setAccounts] = useState<{ real: Account; demo: Account }>({
-    real: { type: "real", balance: 0, initialBalance: 0, totalPnL: 0, positions: [], closedPositions: [] },
-    demo: { type: "demo", balance: 1000, initialBalance: 1000, totalPnL: 0, positions: [], closedPositions: [] },
-  });
+  const [accounts, setAccounts] = useState<{ real: Account; demo: Account }>(() => {
+      const defaults = {
+        real: { type: "real" as const, balance: 0, initialBalance: 0, totalPnL: 0, positions: [] as BinaryOption[], closedPositions: [] as BinaryOption[] },
+        demo: { type: "demo" as const, balance: 1000, initialBalance: 1000, totalPnL: 0, positions: [] as BinaryOption[], closedPositions: [] as BinaryOption[] },
+      };
+      try {
+        const saved = localStorage.getItem("tradeai_positions_v2");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const now = Date.now();
+          const restore = (arr: any[]): BinaryOption[] =>
+            (arr || []).filter((p: any) => p?.expiresAt && p.expiresAt > now)
+              .map((p: any) => ({ ...p, entryTime: new Date(p.entryTime), exitTime: p.exitTime ? new Date(p.exitTime) : undefined }));
+          defaults.real.positions = restore(parsed.real || []);
+          defaults.demo.positions = restore(parsed.demo || []);
+        }
+      } catch { /* ignorar */ }
+      return defaults;
+    });
 
   // Sincronizar TradingContext com AuthContext sempre que o usuário mudar
   useEffect(() => {
@@ -90,7 +105,17 @@ export function TradingProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  const setActiveAccount = useCallback((account: "real" | "demo") => {
+  // Persistir posições abertas no localStorage quando mudarem
+    useEffect(() => {
+      try {
+        localStorage.setItem("tradeai_positions_v2", JSON.stringify({
+          real: accounts.real.positions,
+          demo: accounts.demo.positions,
+        }));
+      } catch { /* ignorar */ }
+    }, [accounts.real.positions, accounts.demo.positions]);
+
+    const setActiveAccount = useCallback((account: "real" | "demo") => {
     setActiveAccountState(account);
     localStorage.setItem(ACTIVE_ACCOUNT_KEY, account);
   }, []);
