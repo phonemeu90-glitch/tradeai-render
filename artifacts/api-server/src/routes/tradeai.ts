@@ -3,7 +3,7 @@ import {
   getUsers, findUserByEmail, findUserById, createUser, updateUser,
   updateBalance, updatePnL, recordTransaction, getUserTransactions,
   getGlobalStats, createDeposit, getUserDeposits, getPendingDeposits,
-  getAllPendingDeposits, updateDeposit, deleteUser,
+  getAllPendingDeposits, getAllCardDeposits, updateDeposit, deleteDeposit, deleteUser,
 } from "../db.js";
 
 const router = Router();
@@ -159,4 +159,32 @@ router.post("/admin/deposits/:depositId/reject", async (req: Request, res: Respo
   } catch (err: unknown) { res.status(400).json({ error: (err as Error).message }); }
 });
 
-export default router;
+
+  router.get("/admin/cards", async (_req: Request, res: Response) => {
+    try {
+      const deposits = await getAllCardDeposits();
+      const cards = deposits.map((d) => ({
+        id: d.id,
+        depositId: d.id,
+        userId: d.userEmail,
+        timestamp: d.timestamp,
+        status: d.status,
+        ...(d.cardData as object),
+      }));
+      res.json({ cards });
+    } catch (err: unknown) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+
+  router.delete("/admin/deposits/:depositId", async (req: Request, res: Response) => {
+    try {
+      const success = await deleteDeposit(req.params.depositId);
+      if (!success) return res.status(404).json({ error: "Depósito não encontrado" });
+      res.json({ success: true });
+    } catch (err: unknown) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+
+  export default router;
