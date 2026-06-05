@@ -521,12 +521,12 @@
             </div>
           </div>
 
-          {/* Operações Abertas */}
-          {account.positions.filter(p => p.asset === asset.symbol).length > 0 && (
+          {/* Operações Abertas — todos os ativos */}
+          {account.positions.length > 0 && (
             <div className="glass-card rounded-2xl p-5">
-              <h3 className="text-sm font-bold text-white mb-3">Operações Abertas ({account.positions.filter(p => p.asset === asset.symbol).length})</h3>
+              <h3 className="text-sm font-bold text-white mb-3">Operações Abertas ({account.positions.length})</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {account.positions.filter(p => p.asset === asset.symbol).map((pos) => {
+                {account.positions.map((pos) => {
                   const timeLeft = Math.max(0, Math.floor(((pos.expiresAt || 0) - Date.now()) / 1000));
                   return (
                     <div key={pos.id} className="p-4 rounded-xl space-y-3"
