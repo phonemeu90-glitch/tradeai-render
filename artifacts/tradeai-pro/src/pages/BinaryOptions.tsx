@@ -8,7 +8,7 @@ import { useTrading } from "@/contexts/TradingContext";
 import { useChart } from "@/contexts/ChartContext";
 import {
   TrendingUp, TrendingDown, Clock, Trophy, X, AlertTriangle,
-  RefreshCw, Settings, Zap, Activity
+  RefreshCw, Settings, Zap, Activity, Search, ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,26 +41,55 @@ interface BinaryTrade {
 }
 
 const ASSETS = [
-  { symbol: "EUR/USD", name: "Euro vs Dólar OTC", startPrice: 1.0850 },
-  { symbol: "GBP/USD", name: "Libra vs Dólar OTC", startPrice: 1.2750 },
-  { symbol: "USD/JPY", name: "Dólar vs Iene OTC", startPrice: 149.85 },
-  { symbol: "AUD/USD", name: "Dólar Aus vs USD OTC", startPrice: 0.6510 },
-  { symbol: "USD/CAD", name: "Dólar vs Cad OTC", startPrice: 1.3620 },
-  { symbol: "USD/BRL", name: "Dólar vs Real OTC", startPrice: 5.2840 },
-  { symbol: "BTC/USD", name: "Bitcoin OTC", startPrice: 67420 },
-  { symbol: "ETH/USD", name: "Ethereum OTC", startPrice: 3248.50 },
-  { symbol: "XRP/USD", name: "Ripple OTC", startPrice: 0.5230 },
-  { symbol: "GOLD", name: "Ouro OTC", startPrice: 2385.50 },
-  { symbol: "SILVER", name: "Prata OTC", startPrice: 28.74 },
-  { symbol: "PETR4", name: "Petrobras OTC", startPrice: 38.42 },
-  { symbol: "VALE3", name: "Vale OTC", startPrice: 61.80 },
-  { symbol: "ITUB4", name: "Itaú Unibanco OTC", startPrice: 34.55 },
-  { symbol: "BBDC4", name: "Bradesco OTC", startPrice: 14.92 },
-  { symbol: "ABEV3", name: "Ambev OTC", startPrice: 11.35 },
-  { symbol: "TSLA", name: "Tesla OTC", startPrice: 248.50 },
-  { symbol: "NVIDIA", name: "NVIDIA OTC", startPrice: 875.30 },
-  { symbol: "AMAZON", name: "Amazon OTC", startPrice: 185.60 },
+  // ── Forex ──────────────────────────────────────────────────────────────────
+  { symbol: "EUR/USD", name: "Euro vs Dólar OTC",        startPrice: 1.0850,   category: "Forex" },
+  { symbol: "GBP/USD", name: "Libra vs Dólar OTC",       startPrice: 1.2750,   category: "Forex" },
+  { symbol: "USD/JPY", name: "Dólar vs Iene OTC",         startPrice: 149.85,   category: "Forex" },
+  { symbol: "AUD/USD", name: "Dólar Aus vs USD OTC",      startPrice: 0.6510,   category: "Forex" },
+  { symbol: "USD/CAD", name: "Dólar vs Cad OTC",          startPrice: 1.3620,   category: "Forex" },
+  { symbol: "USD/BRL", name: "Dólar vs Real OTC",         startPrice: 5.2840,   category: "Forex" },
+  { symbol: "EUR/GBP", name: "Euro vs Libra OTC",         startPrice: 0.8540,   category: "Forex" },
+  { symbol: "EUR/JPY", name: "Euro vs Iene OTC",          startPrice: 162.45,   category: "Forex" },
+  { symbol: "USD/CHF", name: "Dólar vs Franco OTC",       startPrice: 0.9020,   category: "Forex" },
+  { symbol: "GBP/JPY", name: "Libra vs Iene OTC",         startPrice: 191.35,   category: "Forex" },
+  { symbol: "NZD/USD", name: "Dólar NZ vs USD OTC",       startPrice: 0.6090,   category: "Forex" },
+  { symbol: "USD/MXN", name: "Dólar vs Peso OTC",         startPrice: 17.1500,  category: "Forex" },
+  // ── Cripto ─────────────────────────────────────────────────────────────────
+  { symbol: "BTC/USD", name: "Bitcoin OTC",               startPrice: 67420,    category: "Cripto" },
+  { symbol: "ETH/USD", name: "Ethereum OTC",              startPrice: 3248.50,  category: "Cripto" },
+  { symbol: "XRP/USD", name: "Ripple OTC",                startPrice: 0.5230,   category: "Cripto" },
+  { symbol: "BNB/USD", name: "BNB OTC",                   startPrice: 385.20,   category: "Cripto" },
+  { symbol: "SOL/USD", name: "Solana OTC",                startPrice: 142.80,   category: "Cripto" },
+  { symbol: "ADA/USD", name: "Cardano OTC",               startPrice: 0.4820,   category: "Cripto" },
+  { symbol: "DOGE/USD",name: "Dogecoin OTC",              startPrice: 0.1285,   category: "Cripto" },
+  { symbol: "AVAX/USD",name: "Avalanche OTC",             startPrice: 38.60,    category: "Cripto" },
+  { symbol: "DOT/USD", name: "Polkadot OTC",              startPrice: 7.480,    category: "Cripto" },
+  { symbol: "LTC/USD", name: "Litecoin OTC",              startPrice: 84.30,    category: "Cripto" },
+  // ── Ações BR ───────────────────────────────────────────────────────────────
+  { symbol: "PETR4",   name: "Petrobras OTC",             startPrice: 38.42,    category: "Ações BR" },
+  { symbol: "VALE3",   name: "Vale OTC",                  startPrice: 61.80,    category: "Ações BR" },
+  { symbol: "ITUB4",   name: "Itaú Unibanco OTC",         startPrice: 34.55,    category: "Ações BR" },
+  { symbol: "BBDC4",   name: "Bradesco OTC",              startPrice: 14.92,    category: "Ações BR" },
+  { symbol: "ABEV3",   name: "Ambev OTC",                 startPrice: 11.35,    category: "Ações BR" },
+  { symbol: "BBAS3",   name: "Banco do Brasil OTC",       startPrice: 56.80,    category: "Ações BR" },
+  { symbol: "WEGE3",   name: "WEG OTC",                   startPrice: 45.20,    category: "Ações BR" },
+  { symbol: "RENT3",   name: "Localiza OTC",              startPrice: 92.40,    category: "Ações BR" },
+  // ── Ações US ───────────────────────────────────────────────────────────────
+  { symbol: "TSLA",    name: "Tesla OTC",                 startPrice: 248.50,   category: "Ações US" },
+  { symbol: "NVIDIA",  name: "NVIDIA OTC",                startPrice: 875.30,   category: "Ações US" },
+  { symbol: "AMAZON",  name: "Amazon OTC",                startPrice: 185.60,   category: "Ações US" },
+  { symbol: "APPLE",   name: "Apple OTC",                 startPrice: 192.40,   category: "Ações US" },
+  { symbol: "META",    name: "Meta OTC",                  startPrice: 485.20,   category: "Ações US" },
+  { symbol: "MSFT",    name: "Microsoft OTC",             startPrice: 415.80,   category: "Ações US" },
+  // ── Commodities ────────────────────────────────────────────────────────────
+  { symbol: "GOLD",    name: "Ouro OTC",                  startPrice: 2385.50,  category: "Commodities" },
+  { symbol: "SILVER",  name: "Prata OTC",                 startPrice: 28.74,    category: "Commodities" },
+  { symbol: "OIL/USD", name: "Petróleo WTI OTC",          startPrice: 82.40,    category: "Commodities" },
+  { symbol: "COPPER",  name: "Cobre OTC",                 startPrice: 4.2850,   category: "Commodities" },
+  { symbol: "PLAT",    name: "Platina OTC",               startPrice: 1015.00,  category: "Commodities" },
 ];
+
+const CATEGORIES = ["Todos", "Forex", "Cripto", "Ações BR", "Ações US", "Commodities"] as const;
 
 const TIMEFRAMES = [
   { label: "1 Min", value: 60 },
@@ -75,19 +104,14 @@ function generatePriceMovement(
   betPercentage: number,
   shouldGoAgainst: boolean
 ): number {
-  // Movimento natural: ruído aleatório + viés direcional muito sutil
   const naturalVol = 0.0010;
   const noise = (Math.random() - 0.5) * lastPrice * naturalVol;
-
-  // Viés: pequeno e proporcional — não causa estouro, só direciona
   const biasStrength = shouldGoAgainst
-    ? 0.00012 + (betPercentage / 100) * 0.00010   // 0.012% a 0.022% por tick
-    : 0.00006;                                      // 0.006% por tick (a favor)
-
+    ? 0.00012 + (betPercentage / 100) * 0.00010
+    : 0.00006;
   const biasDir = shouldGoAgainst
     ? (direction === "UP" ? -1 : 1)
     : (direction === "UP" ? 1 : -1);
-
   return parseFloat((lastPrice + noise + lastPrice * biasStrength * biasDir).toFixed(4));
 }
 
@@ -122,9 +146,10 @@ interface BinaryChartProps {
   currentPrice: number;
   entryPrice?: number;
   direction?: "UP" | "DOWN";
+  timeframeSeconds?: number;
 }
 
-function BinaryChart({ candles, currentPrice, entryPrice, direction }: BinaryChartProps) {
+function BinaryChart({ candles, currentPrice, entryPrice, direction, timeframeSeconds = 60 }: BinaryChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const draw = useCallback(() => {
@@ -141,7 +166,9 @@ function BinaryChart({ candles, currentPrice, entryPrice, direction }: BinaryCha
 
     const PAD_L = 8, PAD_R = 72, PAD_T = 12, PAD_B = 24;
     const chartW = W - PAD_L - PAD_R, chartH = H - PAD_T - PAD_B;
-    const visible = candles.slice(-50);
+    // Zoom: 1 Min = 60 candles (close-up), 5 Min = 180, 15 Min = 500
+    const visibleCount = timeframeSeconds === 60 ? 60 : timeframeSeconds === 300 ? 180 : 500;
+    const visible = candles.slice(-visibleCount);
 
     let minP = Math.min(...visible.map(c => c.low));
     let maxP = Math.max(...visible.map(c => c.high));
@@ -243,12 +270,175 @@ function BinaryChart({ candles, currentPrice, entryPrice, direction }: BinaryCha
   return <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "280px" }} />;
 }
 
+// ── Modal de seleção de ativos ───────────────────────────────────────────────
+interface AssetPickerProps {
+  open: boolean;
+  onClose: () => void;
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+}
+
+function AssetPicker({ open, onClose, selectedIndex, onSelect }: AssetPickerProps) {
+  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState<typeof CATEGORIES[number]>("Todos");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setSearch("");
+      setActiveCategory("Todos");
+      setTimeout(() => inputRef.current?.focus(), 80);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  const filtered = ASSETS.filter((a) => {
+    const matchCat = activeCategory === "Todos" || a.category === activeCategory;
+    const q = search.toLowerCase();
+    const matchQ = !q || a.symbol.toLowerCase().includes(q) || a.name.toLowerCase().includes(q);
+    return matchCat && matchQ;
+  });
+
+  const categoryColors: Record<string, string> = {
+    Forex: "text-blue-400",
+    Cripto: "text-orange-400",
+    "Ações BR": "text-green-400",
+    "Ações US": "text-purple-400",
+    Commodities: "text-yellow-400",
+  };
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col"
+        style={{
+          background: "linear-gradient(180deg, #0d1120 0%, #080c18 100%)",
+          border: "1px solid rgba(255,255,255,0.09)",
+          boxShadow: "0 32px 64px rgba(0,0,0,0.6)",
+          maxHeight: "80vh",
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4">
+          <div>
+            <h2 className="text-base font-bold text-white tracking-tight">Selecionar Ativo</h2>
+            <p className="text-[11px] text-white/35 mt-0.5">{ASSETS.length} ativos OTC disponíveis</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-white/[0.08]"
+          >
+            <X className="w-4 h-4 text-white/50" />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-5 pb-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+            <input
+              ref={inputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar ativo..."
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 outline-none"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.09)",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Category tabs */}
+        <div className="px-5 pb-3 flex gap-1.5 overflow-x-auto scrollbar-none">
+          {CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
+                activeCategory === cat
+                  ? "text-white"
+                  : "text-white/35 hover:text-white/60"
+              )}
+              style={
+                activeCategory === cat
+                  ? { background: "rgba(59,130,246,0.25)", border: "1px solid rgba(59,130,246,0.4)" }
+                  : { background: "rgba(255,255,255,0.04)", border: "1px solid transparent" }
+              }
+            >
+              {cat}
+              {cat !== "Todos" && (
+                <span className="ml-1.5 text-[10px] opacity-50">
+                  {ASSETS.filter((a) => a.category === cat).length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Asset grid */}
+        <div className="px-5 pb-5 overflow-y-auto flex-1">
+          {filtered.length === 0 ? (
+            <div className="text-center py-10 text-white/25 text-sm">Nenhum ativo encontrado</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {filtered.map((a, _) => {
+                const globalIdx = ASSETS.indexOf(a);
+                const isSelected = globalIdx === selectedIndex;
+                return (
+                  <button
+                    key={a.symbol}
+                    onClick={() => { onSelect(globalIdx); onClose(); }}
+                    className={cn(
+                      "text-left p-3 rounded-xl transition-all group",
+                      isSelected ? "ring-1" : "hover:bg-white/[0.05]"
+                    )}
+                    style={
+                      isSelected
+                        ? { background: "rgba(59,130,246,0.14)", borderColor: "rgba(59,130,246,0.4)", border: "1px solid rgba(59,130,246,0.4)" }
+                        : { border: "1px solid rgba(255,255,255,0.05)" }
+                    }
+                  >
+                    <div className="flex items-start justify-between gap-1">
+                      <p className="text-xs font-bold text-white leading-tight">{a.symbol}</p>
+                      {isSelected && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0 mt-0.5" />
+                      )}
+                    </div>
+                    <p className={cn("text-[10px] mt-0.5 font-medium", categoryColors[a.category] ?? "text-white/40")}>
+                      {a.category}
+                    </p>
+                    <p className="text-[10px] text-white/30 mt-1 font-mono">{a.startPrice.toLocaleString()}</p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Página principal ─────────────────────────────────────────────────────────
 export default function BinaryOptions() {
   const { activeAccount, withdraw, depositFunds, accounts } = useTrading();
   const { charts } = useChart();
 
-  // Persiste ativo selecionado entre refreshes e login/logout
   const [selectedAsset, setSelectedAsset] = useState(() => {
     const saved = localStorage.getItem("tradeai_binary_asset");
     const idx = saved ? parseInt(saved, 10) : 0;
@@ -271,6 +461,7 @@ export default function BinaryOptions() {
   const [balance, setBalance] = useState(accounts[activeAccount].balance);
   const [trades, setTrades] = useState<BinaryTrade[]>([]);
   const [closedTrades, setClosedTrades] = useState<BinaryTrade[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const tradesRef = useRef<BinaryTrade[]>([]);
   const currentPriceRef = useRef(currentPrice);
@@ -292,12 +483,11 @@ export default function BinaryOptions() {
     setCurrentPrice(asset.startPrice);
     currentPriceRef.current = asset.startPrice;
 
-    // Busca direta do servidor para este ativo — não espera o ChartContext global
     fetch(`/api/charts/history/${encodeURIComponent(asset.symbol)}`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (!data || !data.candles || data.candles.length === 0) return;
-        if (seededRef.current) return; // já foi semeado por outra via
+        if (seededRef.current) return;
         const serverCandles: Candle[] = data.candles.map((c: any) => ({
           time: c.time,
           timestamp: c.timestamp ?? Date.now(),
@@ -364,9 +554,8 @@ export default function BinaryOptions() {
 
         setCurrentPrice(newClose);
         currentPriceRef.current = newClose;
-        // APPEND-ONLY para persistência visual (limita a 200 candles)
         const appended = [...prevCandles, newCandle];
-        return appended.length > 200 ? appended.slice(-200) : appended;
+        return appended.length > 600 ? appended.slice(-600) : appended;
       });
     }, 1000);
     return () => clearInterval(interval);
@@ -434,12 +623,33 @@ export default function BinaryOptions() {
     else toast.success(`✅ Aposta pequena: ${betPercentage.toFixed(0)}% — a favor!`);
   };
 
+  const handleSelectAsset = (idx: number) => {
+    setSelectedAsset(idx);
+    localStorage.setItem("tradeai_binary_asset", String(idx));
+  };
+
   const shouldShowAgainstIndicator = currentTrade && currentTrade.betPercentage >= 50;
   const timeRemaining = currentTrade ? Math.max(0, Math.ceil((currentTrade.expiryTime - Date.now()) / 1000)) : 0;
 
+  const categoryColors: Record<string, string> = {
+    Forex: "text-blue-400",
+    Cripto: "text-orange-400",
+    "Ações BR": "text-green-400",
+    "Ações US": "text-purple-400",
+    Commodities: "text-yellow-400",
+  };
+
   return (
     <Layout>
+      <AssetPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        selectedIndex={selectedAsset}
+        onSelect={handleSelectAsset}
+      />
+
       <div className="p-4 lg:p-6 space-y-4">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-white">Opções Binárias OTC</h1>
@@ -456,21 +666,43 @@ export default function BinaryOptions() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-          {/* Lista de ativos */}
-          <div className="rounded-2xl p-4 space-y-1.5"
-            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <h3 className="text-[10px] font-semibold text-white/40 uppercase tracking-widest mb-3">Ativos OTC</h3>
-            {ASSETS.map((a, i) => (
-              <button key={i} onClick={() => { setSelectedAsset(i); localStorage.setItem("tradeai_binary_asset", String(i)); }}
-                className={cn("w-full text-left p-3 rounded-xl transition-all",
-                  selectedAsset === i ? "border" : "hover:bg-white/[0.04] border border-transparent")}
-                style={selectedAsset === i ? { background: "rgba(59,130,246,0.12)", borderColor: "rgba(59,130,246,0.35)" } : {}}>
-                <p className="text-sm font-semibold text-white">{a.symbol} OTC</p>
-                <p className="text-[11px] text-white/35">{a.name}</p>
-              </button>
-            ))}
+        {/* Asset selector bar */}
+        <button
+          onClick={() => setPickerOpen(true)}
+          className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all hover:bg-white/[0.06] active:scale-[0.995] group"
+          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)" }}
+            >
+              <Activity className="w-4 h-4 text-blue-400" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-bold text-white leading-tight">{asset.symbol} OTC</p>
+              <p className={cn("text-[11px] font-medium", categoryColors[asset.category] ?? "text-white/40")}>
+                {asset.name} · {asset.category}
+              </p>
+            </div>
           </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-mono text-white/60">{currentPrice.toFixed(4)}</p>
+              <p className="text-[10px] text-white/30">{ASSETS.length} ativos disponíveis</p>
+            </div>
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-300 transition-all group-hover:bg-blue-500/20"
+              style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)" }}
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+              Trocar
+            </div>
+          </div>
+        </button>
+
+        {/* Chart + Operation panel */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* Gráfico Canvas */}
           <div className="lg:col-span-2 rounded-2xl overflow-hidden"
@@ -478,6 +710,12 @@ export default function BinaryOptions() {
             <div className="px-4 pt-3 pb-1 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-white">{asset.symbol} OTC</span>
+                <span
+                  className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium", categoryColors[asset.category] ?? "text-white/40")}
+                  style={{ background: "rgba(255,255,255,0.05)" }}
+                >
+                  {asset.category}
+                </span>
                 <span className="text-xs font-mono text-white/50">{currentPrice.toFixed(4)}</span>
               </div>
               {currentTrade && (
@@ -490,7 +728,8 @@ export default function BinaryOptions() {
               )}
             </div>
             <BinaryChart candles={candles} currentPrice={currentPrice}
-              entryPrice={currentTrade?.entryPrice} direction={currentTrade?.direction} />
+              entryPrice={currentTrade?.entryPrice} direction={currentTrade?.direction}
+              timeframeSeconds={timeframe} />
           </div>
 
           {/* Painel de operação */}
