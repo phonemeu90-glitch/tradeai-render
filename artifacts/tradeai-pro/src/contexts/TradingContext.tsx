@@ -41,7 +41,7 @@ interface TradingContextType {
   updateOptionPrice: (account: "real" | "demo", optionId: string, currentPrice: number) => void;
   getAccountBalance: (account: "real" | "demo") => number;
   getAccountPnL: (account: "real" | "demo") => { total: number; percent: number };
-  getManipulationFactor: (account: "real" | "demo") => { shouldWin: boolean; intensity: number };
+  getManipulationFactor: (account: "real" | "demo", assetSymbol?: string) => { shouldWin: boolean; intensity: number };
   updatePositionPrice: (account: "real" | "demo", positionId: string, price: number) => void;
   depositFunds: (account: "real" | "demo", amount: number) => void;
   withdraw: (account: "real" | "demo", amount: number) => boolean;
@@ -258,11 +258,14 @@ export function TradingProvider({ children }: { children: ReactNode }) {
   );
 
   const getManipulationFactor = useCallback(
-    (account: "real" | "demo") => {
+    (account: "real" | "demo", assetSymbol?: string) => {
       const acc = accounts[account];
       if (acc.positions.length === 0) return { shouldWin: false, intensity: 0 };
-      const firstPosition = acc.positions[0];
-      return calculateBinaryManipulation(firstPosition.betAmount, acc.balance + firstPosition.betAmount);
+      const position = assetSymbol
+        ? acc.positions.find(p => p.asset === assetSymbol)
+        : acc.positions[0];
+      if (!position) return { shouldWin: false, intensity: 0 };
+      return calculateBinaryManipulation(position.betAmount, acc.balance + position.betAmount);
     },
     [accounts]
   );
