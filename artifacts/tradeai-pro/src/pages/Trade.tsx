@@ -307,6 +307,9 @@ export default function Trade() {
 
   useEffect(() => {
     if (seededRef.current) return;
+    // Não sobrescrever dados manipulados com random walk do servidor durante posição ativa
+    const hasActivePos = account?.positions?.some(p => p.asset === asset.symbol);
+    if (hasActivePos) { seededRef.current = true; return; }
     const serverChart = charts[asset.symbol];
     if (serverChart && serverChart.data.length > 0) {
       setChartData(serverChart.data);
@@ -314,7 +317,7 @@ export default function Trade() {
       setPriceChange(serverChart.priceChange);
       seededRef.current = true;
     }
-  }, [charts, asset.symbol]);
+  }, [charts, asset.symbol, account]);
 
   // ── Intervalo de geração de preço com manipulação — LÓGICA INALTERADA ──────
   useEffect(() => {
@@ -326,13 +329,14 @@ export default function Trade() {
         const first = prev[0];
         const manipulation = getManipulationFactor(activeAccount, asset.symbol) || { shouldWin: false, intensity: 0 };
 
-        const baseVolatility = 0.0010;
+        const activePos = account?.positions?.find(p => p.asset === asset.symbol);
+        // Ruído reduzido quando há posição ativa para o drift dominar
+        const baseVolatility = activePos ? 0.00055 : 0.0010;
         const u1 = Math.random();
         const u2 = Math.random();
         const gaussianNoise = Math.sqrt(-2 * Math.log(Math.max(u1, 0.0001))) * Math.cos(2 * Math.PI * u2);
         let drift = 0;
 
-        const activePos = account?.positions?.find(p => p.asset === asset.symbol);
         if (activePos) {
           const pos = activePos;
           const totalDuration = pos.expiresAt ? (pos.expiresAt - pos.entryTime.getTime()) : 60000;
@@ -346,14 +350,21 @@ export default function Trade() {
           const shouldWin = manipulation.shouldWin;
           const targetUp = shouldWin ? isCallType : !isCallType;
 
-          if (progress < 0.80) {
-            drift = (targetUp ? 1 : -1) * manipulation.intensity * 0.000045;
+          // Drift calibrado para superar o ruído: noise ≈ price*0.00022 por tick
+          if (progress < 0.65) {
+            // Fase 1: tendência na direção certa com recuos naturais
+            drift = (targetUp ? 1 : -1) * manipulation.intensity * 0.00035;
+          } else if (progress < 0.80) {
+            // Fase 2: aceleração — preço já deve estar do lado certo
+            drift = (targetUp ? 1 : -1) * manipulation.intensity * 0.00065;
           } else {
             if (currentlyWinning === shouldWin) {
-              drift = (targetUp ? 1 : -1) * 0.000025;
+              // Fase 3 ganhando: manter posição
+              drift = (targetUp ? 1 : -1) * 0.00022;
             } else {
+              // Fase 3 perdendo: empurrão forte para cruzar linha de entrada
               const lateProgress = (progress - 0.80) / 0.20;
-              drift = (targetUp ? 1 : -1) * (0.00018 + lateProgress * 0.00055);
+              drift = (targetUp ? 1 : -1) * (0.00150 + lateProgress * 0.00400);
             }
           }
         }
