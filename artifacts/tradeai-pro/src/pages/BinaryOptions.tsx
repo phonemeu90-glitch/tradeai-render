@@ -1,839 +1,612 @@
-/**
- * BinaryOptions — Gráfico persistente via servidor + manipulação client-side inalterada
- * Ativos com sufixo OTC. Seeding do servidor ao montar e ao trocar ativo.
- */
-import { useState, useEffect, useRef, useCallback } from "react";
-import Layout from "@/components/Layout";
-import { useTrading } from "@/contexts/TradingContext";
-import { useChart } from "@/contexts/ChartContext";
-import {
-  TrendingUp, TrendingDown, Clock, Trophy, X, AlertTriangle,
-  RefreshCw, Settings, Zap, Activity, Search, ChevronDown,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+/*
+   * BinaryOptions — Idêntico ao Trade, só com 40+ ativos OTC e picker modal
+   * Lógica de entrada, manipulação, chart e contexto: INALTERADOS vs Trade.tsx
+   */
+  import { useState, useEffect, useCallback, useRef } from "react";
+  import Layout from "@/components/Layout";
+  import ProfessionalChart from "@/components/ProfessionalChart";
+  import { useTrading } from "@/contexts/TradingContext";
+  import { useChart } from "@/contexts/ChartContext";
+  import {
+    TrendingUp, TrendingDown, Clock, CheckCircle2, AlertTriangle,
+    Activity, Search, X, ChevronDown,
+  } from "lucide-react";
+  import { Button } from "@/components/ui/button";
+  import { Input } from "@/components/ui/input";
+  import { Label } from "@/components/ui/label";
+  import { Badge } from "@/components/ui/badge";
+  import { cn } from "@/lib/utils";
+  import { toast } from "sonner";
 
-interface Candle {
-  time: string;
-  timestamp: number;
-  open: number;
-  close: number;
-  high: number;
-  low: number;
-}
-
-interface BinaryTrade {
-  id: string;
-  asset: string;
-  direction: "UP" | "DOWN";
-  entryPrice: number;
-  entryTime: number;
-  expiryTime: number;
-  amount: number;
-  status: "open" | "won" | "lost";
-  pnl: number;
-  account: "real" | "demo";
-  betPercentage: number;
-}
-
-const ASSETS = [
-  // ── Forex ──────────────────────────────────────────────────────────────────
-  { symbol: "EUR/USD", name: "Euro vs Dólar OTC",        startPrice: 1.0850,   category: "Forex" },
-  { symbol: "GBP/USD", name: "Libra vs Dólar OTC",       startPrice: 1.2750,   category: "Forex" },
-  { symbol: "USD/JPY", name: "Dólar vs Iene OTC",         startPrice: 149.85,   category: "Forex" },
-  { symbol: "AUD/USD", name: "Dólar Aus vs USD OTC",      startPrice: 0.6510,   category: "Forex" },
-  { symbol: "USD/CAD", name: "Dólar vs Cad OTC",          startPrice: 1.3620,   category: "Forex" },
-  { symbol: "USD/BRL", name: "Dólar vs Real OTC",         startPrice: 5.2840,   category: "Forex" },
-  { symbol: "EUR/GBP", name: "Euro vs Libra OTC",         startPrice: 0.8540,   category: "Forex" },
-  { symbol: "EUR/JPY", name: "Euro vs Iene OTC",          startPrice: 162.45,   category: "Forex" },
-  { symbol: "USD/CHF", name: "Dólar vs Franco OTC",       startPrice: 0.9020,   category: "Forex" },
-  { symbol: "GBP/JPY", name: "Libra vs Iene OTC",         startPrice: 191.35,   category: "Forex" },
-  { symbol: "NZD/USD", name: "Dólar NZ vs USD OTC",       startPrice: 0.6090,   category: "Forex" },
-  { symbol: "USD/MXN", name: "Dólar vs Peso OTC",         startPrice: 17.1500,  category: "Forex" },
-  // ── Cripto ─────────────────────────────────────────────────────────────────
-  { symbol: "BTC/USD", name: "Bitcoin OTC",               startPrice: 67420,    category: "Cripto" },
-  { symbol: "ETH/USD", name: "Ethereum OTC",              startPrice: 3248.50,  category: "Cripto" },
-  { symbol: "XRP/USD", name: "Ripple OTC",                startPrice: 0.5230,   category: "Cripto" },
-  { symbol: "BNB/USD", name: "BNB OTC",                   startPrice: 385.20,   category: "Cripto" },
-  { symbol: "SOL/USD", name: "Solana OTC",                startPrice: 142.80,   category: "Cripto" },
-  { symbol: "ADA/USD", name: "Cardano OTC",               startPrice: 0.4820,   category: "Cripto" },
-  { symbol: "DOGE/USD",name: "Dogecoin OTC",              startPrice: 0.1285,   category: "Cripto" },
-  { symbol: "AVAX/USD",name: "Avalanche OTC",             startPrice: 38.60,    category: "Cripto" },
-  { symbol: "DOT/USD", name: "Polkadot OTC",              startPrice: 7.480,    category: "Cripto" },
-  { symbol: "LTC/USD", name: "Litecoin OTC",              startPrice: 84.30,    category: "Cripto" },
-  // ── Ações BR ───────────────────────────────────────────────────────────────
-  { symbol: "PETR4",   name: "Petrobras OTC",             startPrice: 38.42,    category: "Ações BR" },
-  { symbol: "VALE3",   name: "Vale OTC",                  startPrice: 61.80,    category: "Ações BR" },
-  { symbol: "ITUB4",   name: "Itaú Unibanco OTC",         startPrice: 34.55,    category: "Ações BR" },
-  { symbol: "BBDC4",   name: "Bradesco OTC",              startPrice: 14.92,    category: "Ações BR" },
-  { symbol: "ABEV3",   name: "Ambev OTC",                 startPrice: 11.35,    category: "Ações BR" },
-  { symbol: "BBAS3",   name: "Banco do Brasil OTC",       startPrice: 56.80,    category: "Ações BR" },
-  { symbol: "WEGE3",   name: "WEG OTC",                   startPrice: 45.20,    category: "Ações BR" },
-  { symbol: "RENT3",   name: "Localiza OTC",              startPrice: 92.40,    category: "Ações BR" },
-  // ── Ações US ───────────────────────────────────────────────────────────────
-  { symbol: "TSLA",    name: "Tesla OTC",                 startPrice: 248.50,   category: "Ações US" },
-  { symbol: "NVIDIA",  name: "NVIDIA OTC",                startPrice: 875.30,   category: "Ações US" },
-  { symbol: "AMAZON",  name: "Amazon OTC",                startPrice: 185.60,   category: "Ações US" },
-  { symbol: "APPLE",   name: "Apple OTC",                 startPrice: 192.40,   category: "Ações US" },
-  { symbol: "META",    name: "Meta OTC",                  startPrice: 485.20,   category: "Ações US" },
-  { symbol: "MSFT",    name: "Microsoft OTC",             startPrice: 415.80,   category: "Ações US" },
-  // ── Commodities ────────────────────────────────────────────────────────────
-  { symbol: "GOLD",    name: "Ouro OTC",                  startPrice: 2385.50,  category: "Commodities" },
-  { symbol: "SILVER",  name: "Prata OTC",                 startPrice: 28.74,    category: "Commodities" },
-  { symbol: "OIL/USD", name: "Petróleo WTI OTC",          startPrice: 82.40,    category: "Commodities" },
-  { symbol: "COPPER",  name: "Cobre OTC",                 startPrice: 4.2850,   category: "Commodities" },
-  { symbol: "PLAT",    name: "Platina OTC",               startPrice: 1015.00,  category: "Commodities" },
-];
-
-const CATEGORIES = ["Todos", "Forex", "Cripto", "Ações BR", "Ações US", "Commodities"] as const;
-
-const TIMEFRAMES = [
-  { label: "1 Min", value: 60 },
-  { label: "5 Min", value: 300 },
-  { label: "15 Min", value: 900 },
-];
-
-// ── Lógica de preço: INALTERADA ─────────────────────────────────────────────
-function generatePriceMovement(
-  lastPrice: number,
-  direction: "UP" | "DOWN",
-  betPercentage: number,
-  shouldGoAgainst: boolean
-): number {
-  const naturalVol = 0.0010;
-  const noise = (Math.random() - 0.5) * lastPrice * naturalVol;
-  const biasStrength = shouldGoAgainst
-    ? 0.00012 + (betPercentage / 100) * 0.00010
-    : 0.00006;
-  const biasDir = shouldGoAgainst
-    ? (direction === "UP" ? -1 : 1)
-    : (direction === "UP" ? 1 : -1);
-  return parseFloat((lastPrice + noise + lastPrice * biasStrength * biasDir).toFixed(4));
-}
-
-// Fallback local (usado apenas se servidor ainda não respondeu)
-function generateFallbackCandles(count: number, startPrice: number): Candle[] {
-  const candles: Candle[] = [];
-  let price = startPrice;
-  const now = Date.now();
-  for (let i = count; i >= 0; i--) {
-    const timestamp = now - i * 1000;
-    const open = price;
-    const change = (Math.random() - 0.48) * price * 0.008;
-    const close = open + change;
-    const high = Math.max(open, close) + Math.random() * price * 0.003;
-    const low = Math.min(open, close) - Math.random() * price * 0.003;
-    candles.push({
-      time: new Date(timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-      timestamp,
-      open: parseFloat(open.toFixed(4)),
-      close: parseFloat(close.toFixed(4)),
-      high: parseFloat(high.toFixed(4)),
-      low: parseFloat(low.toFixed(4)),
-    });
-    price = close;
+  // Fallback local (idêntico ao Trade.tsx)
+  function generatePriceData(points: number, startPrice: number) {
+    const data = [];
+    let price = startPrice;
+    const now = new Date();
+    for (let i = points; i >= 0; i--) {
+      const time = new Date(now.getTime() - i * 1000);
+      const u1 = Math.random(), u2 = Math.random();
+      const noise = Math.sqrt(-2 * Math.log(Math.max(u1, 1e-10))) * Math.cos(2 * Math.PI * u2);
+      const move = price * 0.004 * noise * 0.4;
+      const open = price;
+      const close = parseFloat((open + move).toFixed(4));
+      const wickSize = Math.abs(move) * (0.3 + Math.random() * 0.4);
+      data.push({
+        time: time.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        open, close,
+        high: parseFloat((Math.max(open, close) + wickSize).toFixed(4)),
+        low: parseFloat((Math.min(open, close) - Math.max(wickSize * 0.5, 0.0001)).toFixed(4)),
+        price: close,
+        volume: Math.floor(Math.random() * 80000 + 20000),
+      });
+      price = close;
+    }
+    return data;
   }
-  return candles;
-}
 
-// ── Componente do gráfico Canvas — INALTERADO ────────────────────────────────
-interface BinaryChartProps {
-  candles: Candle[];
-  currentPrice: number;
-  entryPrice?: number;
-  direction?: "UP" | "DOWN";
-  timeframeSeconds?: number;
-}
+  const ASSETS = [
+    // ── Forex ──────────────────────────────────────────────────────────────────
+    { symbol: "EUR/USD", name: "Euro vs Dólar OTC",      startPrice: 1.0850,  color: "#3b82f6", type: "Forex" },
+    { symbol: "GBP/USD", name: "Libra vs Dólar OTC",     startPrice: 1.2750,  color: "#06b6d4", type: "Forex" },
+    { symbol: "USD/JPY", name: "Dólar vs Iene OTC",      startPrice: 149.85,  color: "#8b5cf6", type: "Forex" },
+    { symbol: "AUD/USD", name: "Dólar Aus vs USD OTC",   startPrice: 0.6510,  color: "#f59e0b", type: "Forex" },
+    { symbol: "USD/CAD", name: "Dólar vs CAD OTC",       startPrice: 1.3620,  color: "#10b981", type: "Forex" },
+    { symbol: "USD/BRL", name: "Dólar vs Real OTC",      startPrice: 5.2840,  color: "#22c55e", type: "Forex" },
+    { symbol: "EUR/GBP", name: "Euro vs Libra OTC",      startPrice: 0.8540,  color: "#3b82f6", type: "Forex" },
+    { symbol: "EUR/JPY", name: "Euro vs Iene OTC",       startPrice: 162.45,  color: "#06b6d4", type: "Forex" },
+    { symbol: "USD/CHF", name: "Dólar vs Franco OTC",    startPrice: 0.9020,  color: "#8b5cf6", type: "Forex" },
+    { symbol: "GBP/JPY", name: "Libra vs Iene OTC",      startPrice: 191.35,  color: "#f59e0b", type: "Forex" },
+    { symbol: "NZD/USD", name: "Dólar NZ vs USD OTC",    startPrice: 0.6090,  color: "#10b981", type: "Forex" },
+    { symbol: "USD/MXN", name: "Dólar vs Peso OTC",      startPrice: 17.1500, color: "#22c55e", type: "Forex" },
+    // ── Cripto ─────────────────────────────────────────────────────────────────
+    { symbol: "BTC/USD", name: "Bitcoin OTC",            startPrice: 67420,   color: "#f97316", type: "Cripto" },
+    { symbol: "ETH/USD", name: "Ethereum OTC",           startPrice: 3248.50, color: "#6366f1", type: "Cripto" },
+    { symbol: "XRP/USD", name: "Ripple OTC",             startPrice: 0.5230,  color: "#06b6d4", type: "Cripto" },
+    { symbol: "BNB/USD", name: "BNB OTC",                startPrice: 385.20,  color: "#f59e0b", type: "Cripto" },
+    { symbol: "SOL/USD", name: "Solana OTC",             startPrice: 142.80,  color: "#8b5cf6", type: "Cripto" },
+    { symbol: "ADA/USD", name: "Cardano OTC",            startPrice: 0.4820,  color: "#3b82f6", type: "Cripto" },
+    { symbol: "DOGE/USD",name: "Dogecoin OTC",           startPrice: 0.1285,  color: "#f59e0b", type: "Cripto" },
+    { symbol: "AVAX/USD",name: "Avalanche OTC",          startPrice: 38.60,   color: "#ef4444", type: "Cripto" },
+    { symbol: "DOT/USD", name: "Polkadot OTC",           startPrice: 7.480,   color: "#ec4899", type: "Cripto" },
+    { symbol: "LTC/USD", name: "Litecoin OTC",           startPrice: 84.30,   color: "#a3a3a3", type: "Cripto" },
+    // ── Ações BR ───────────────────────────────────────────────────────────────
+    { symbol: "PETR4",   name: "Petrobras OTC",          startPrice: 38.42,   color: "#22c55e", type: "Ações BR" },
+    { symbol: "VALE3",   name: "Vale OTC",               startPrice: 61.80,   color: "#10b981", type: "Ações BR" },
+    { symbol: "ITUB4",   name: "Itaú Unibanco OTC",      startPrice: 34.55,   color: "#06b6d4", type: "Ações BR" },
+    { symbol: "BBDC4",   name: "Bradesco OTC",           startPrice: 14.92,   color: "#3b82f6", type: "Ações BR" },
+    { symbol: "ABEV3",   name: "Ambev OTC",              startPrice: 11.35,   color: "#f59e0b", type: "Ações BR" },
+    { symbol: "BBAS3",   name: "Banco do Brasil OTC",    startPrice: 56.80,   color: "#22c55e", type: "Ações BR" },
+    { symbol: "WEGE3",   name: "WEG OTC",                startPrice: 45.20,   color: "#8b5cf6", type: "Ações BR" },
+    { symbol: "RENT3",   name: "Localiza OTC",           startPrice: 92.40,   color: "#ec4899", type: "Ações BR" },
+    // ── Ações US ───────────────────────────────────────────────────────────────
+    { symbol: "TSLA",    name: "Tesla OTC",              startPrice: 248.50,  color: "#ef4444", type: "Ações US" },
+    { symbol: "NVIDIA",  name: "NVIDIA OTC",             startPrice: 875.30,  color: "#22c55e", type: "Ações US" },
+    { symbol: "AMAZON",  name: "Amazon OTC",             startPrice: 185.60,  color: "#f97316", type: "Ações US" },
+    { symbol: "APPLE",   name: "Apple OTC",              startPrice: 192.40,  color: "#a3a3a3", type: "Ações US" },
+    { symbol: "META",    name: "Meta OTC",               startPrice: 485.20,  color: "#3b82f6", type: "Ações US" },
+    { symbol: "MSFT",    name: "Microsoft OTC",          startPrice: 415.80,  color: "#06b6d4", type: "Ações US" },
+    // ── Commodities ────────────────────────────────────────────────────────────
+    { symbol: "GOLD",    name: "Ouro OTC",               startPrice: 2385.50, color: "#f59e0b", type: "Commodities" },
+    { symbol: "SILVER",  name: "Prata OTC",              startPrice: 28.74,   color: "#a3a3a3", type: "Commodities" },
+    { symbol: "OIL/USD", name: "Petróleo WTI OTC",       startPrice: 82.40,   color: "#78716c", type: "Commodities" },
+    { symbol: "COPPER",  name: "Cobre OTC",              startPrice: 4.2850,  color: "#f97316", type: "Commodities" },
+    { symbol: "PLAT",    name: "Platina OTC",            startPrice: 1015.00, color: "#8b5cf6", type: "Commodities" },
+  ];
 
-function BinaryChart({ candles, currentPrice, entryPrice, direction, timeframeSeconds = 60 }: BinaryChartProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const CATEGORIES = ["Todos", "Forex", "Cripto", "Ações BR", "Ações US", "Commodities"] as const;
 
-  const draw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d", { alpha: false });
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    const W = canvas.offsetWidth, H = canvas.offsetHeight;
-    if (!W || !H) return;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    ctx.scale(dpr, dpr);
+  const EXPIRATION_TIMES = [
+    { label: "1m", value: 60 },
+    { label: "5m", value: 300 },
+    { label: "15m", value: 900 },
+  ];
 
-    const PAD_L = 8, PAD_R = 72, PAD_T = 12, PAD_B = 24;
-    const chartW = W - PAD_L - PAD_R, chartH = H - PAD_T - PAD_B;
-    // Zoom: 1 Min = 60 candles (close-up), 5 Min = 180, 15 Min = 500
-    const visibleCount = timeframeSeconds === 60 ? 60 : timeframeSeconds === 300 ? 180 : 500;
-    const visible = candles.slice(-visibleCount);
+  // ── Modal de seleção de ativos ───────────────────────────────────────────────
+  function AssetPicker({ open, onClose, selectedIndex, onSelect }: {
+    open: boolean; onClose: () => void; selectedIndex: number; onSelect: (i: number) => void;
+  }) {
+    const [search, setSearch] = useState("");
+    const [activeCategory, setActiveCategory] = useState<typeof CATEGORIES[number]>("Todos");
+    const inputRef = useRef<HTMLInputElement>(null);
 
-    let minP = Math.min(...visible.map(c => c.low));
-    let maxP = Math.max(...visible.map(c => c.high));
-    if (entryPrice) { minP = Math.min(minP, entryPrice); maxP = Math.max(maxP, entryPrice); }
-    if (currentPrice) { minP = Math.min(minP, currentPrice); maxP = Math.max(maxP, currentPrice); }
-    const rng = maxP - minP || 1;
-    minP -= rng * 0.08; maxP += rng * 0.08;
+    useEffect(() => {
+      if (open) { setSearch(""); setActiveCategory("Todos"); setTimeout(() => inputRef.current?.focus(), 80); }
+    }, [open]);
+    useEffect(() => {
+      if (!open) return;
+      const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }, [open, onClose]);
 
-    const getY = (p: number) => PAD_T + chartH - ((p - minP) / (maxP - minP)) * chartH;
-    const getX = (i: number) => PAD_L + (i + 0.5) * (chartW / visible.length);
-
-    ctx.fillStyle = "#080c18";
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = "rgba(255,255,255,0.02)";
-    ctx.fillRect(W - PAD_R, PAD_T, PAD_R, chartH);
-
-    const gridN = 5;
-    for (let i = 0; i <= gridN; i++) {
-      const y = PAD_T + (chartH / gridN) * i;
-      const p = maxP - ((maxP - minP) / gridN) * i;
-      ctx.strokeStyle = "rgba(255,255,255,0.04)"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
-      ctx.fillStyle = "rgba(130,140,160,0.55)";
-      ctx.font = "9.5px 'SF Mono', Consolas, monospace"; ctx.textAlign = "right";
-      ctx.fillText(p.toFixed(4), W - 6, y + 3.5);
-    }
-
-    const colN = 6;
-    for (let c = 1; c < colN; c++) {
-      const x = PAD_L + (chartW / colN) * c;
-      ctx.strokeStyle = "rgba(255,255,255,0.025)"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(x, PAD_T); ctx.lineTo(x, PAD_T + chartH); ctx.stroke();
-    }
-
-    const cW = Math.max(1.5, chartW / visible.length);
-    const bW = Math.max(1, cW * 0.6);
-
-    visible.forEach((c, i) => {
-      const x = getX(i), oY = getY(c.open), cY = getY(c.close), hY = getY(c.high), lY = getY(c.low);
-      const isG = c.close >= c.open, isLast = i === visible.length - 1;
-      ctx.save();
-      ctx.strokeStyle = isG ? "rgba(0,185,122,0.7)" : "rgba(224,53,53,0.7)"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(x, hY); ctx.lineTo(x, lY); ctx.stroke();
-      const bTop = Math.min(oY, cY), bH = Math.max(Math.abs(cY - oY), 1);
-      const g = ctx.createLinearGradient(0, bTop, 0, bTop + bH);
-      if (isG) { g.addColorStop(0, isLast ? "#00d094" : "#00b87a"); g.addColorStop(1, isLast ? "#008c64" : "#006e48"); }
-      else { g.addColorStop(0, isLast ? "#ff4d4d" : "#e03535"); g.addColorStop(1, isLast ? "#c01010" : "#a01010"); }
-      ctx.fillStyle = g;
-      if (bH > 2) { ctx.beginPath(); ctx.roundRect(x - bW / 2, bTop, bW, bH, Math.min(1.5, bW * 0.15)); ctx.fill(); }
-      else ctx.fillRect(x - bW / 2, bTop, bW, bH);
-      if (isLast) { ctx.shadowColor = isG ? "#00d094" : "#ff4d4d"; ctx.shadowBlur = 8; ctx.strokeStyle = isG ? "#00d094" : "#ff4d4d"; ctx.lineWidth = 0.5; ctx.stroke(); }
-      ctx.restore();
+    const filtered = ASSETS.filter((a) => {
+      const matchCat = activeCategory === "Todos" || a.type === activeCategory;
+      const q = search.toLowerCase();
+      return !q || a.symbol.toLowerCase().includes(q) || a.name.toLowerCase().includes(q);
     });
 
-    if (entryPrice && entryPrice >= minP && entryPrice <= maxP) {
-      const eY = getY(entryPrice), eC = direction === "UP" ? "#22c55e" : "#f97316";
-      const eLabel = direction === "UP" ? "▲ ENTRADA" : "▼ ENTRADA";
-      ctx.save(); ctx.strokeStyle = eC; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
-      ctx.beginPath(); ctx.moveTo(PAD_L, eY); ctx.lineTo(W - PAD_R, eY); ctx.stroke();
-      ctx.setLineDash([]); ctx.font = "bold 9px 'SF Mono', monospace";
-      const em = ctx.measureText(eLabel);
-      ctx.fillStyle = `${eC}20`; ctx.strokeStyle = eC; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.roundRect(PAD_L + 4, eY - 9, em.width + 14, 18, 3); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = eC; ctx.textAlign = "left"; ctx.fillText(eLabel, PAD_L + 11, eY + 4);
-      ctx.restore();
-    }
-
-    const lastY = Math.max(PAD_T + 1, Math.min(PAD_T + chartH - 1, getY(currentPrice)));
-    const isUp = visible.length > 1 && currentPrice >= visible[visible.length - 2].close;
-    ctx.save(); ctx.strokeStyle = "rgba(255,255,255,0.14)"; ctx.lineWidth = 1; ctx.setLineDash([4, 5]);
-    ctx.beginPath(); ctx.moveTo(PAD_L, lastY); ctx.lineTo(W - PAD_R, lastY); ctx.stroke(); ctx.setLineDash([]);
-    const pulse = 3 + Math.sin(Date.now() / 300) * 1, dotX = W - PAD_R - 6;
-    const dotCol = isUp ? "#00d094" : "#ff4d4d";
-    ctx.fillStyle = dotCol; ctx.shadowColor = dotCol; ctx.shadowBlur = 10;
-    ctx.beginPath(); ctx.arc(dotX, lastY, pulse, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0; ctx.globalAlpha = 0.2;
-    ctx.beginPath(); ctx.arc(dotX, lastY, pulse + 4, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-    const pText = currentPrice.toFixed(4); ctx.font = "bold 10px 'SF Mono', Consolas, monospace";
-    const pm = ctx.measureText(pText), bdgW = pm.width + 16, bdgH = 19, bdgX = W - PAD_R + 2;
-    const bdgY = Math.max(PAD_T, Math.min(PAD_T + chartH - bdgH, lastY - bdgH / 2));
-    ctx.fillStyle = isUp ? "rgba(0,208,148,0.15)" : "rgba(255,77,77,0.15)"; ctx.strokeStyle = dotCol; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.roundRect(bdgX, bdgY, bdgW, bdgH, 3); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = dotCol; ctx.textAlign = "left"; ctx.fillText(pText, bdgX + 8, bdgY + bdgH / 2 + 3.5);
-    ctx.restore();
-
-    ctx.fillStyle = "rgba(110,120,140,0.5)"; ctx.font = "8.5px 'SF Mono', Consolas, monospace"; ctx.textAlign = "center";
-    const xStep = Math.max(1, Math.floor(visible.length / 6));
-    for (let i = 0; i < visible.length; i += xStep) ctx.fillText(visible[i].time, getX(i), H - 6);
-  }, [candles, currentPrice, entryPrice, direction]);
-
-  useEffect(() => {
-    let raf: number;
-    const loop = () => { draw(); raf = requestAnimationFrame(loop); };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [draw]);
-
-  return <canvas ref={canvasRef} style={{ display: "block", width: "100%", height: "280px" }} />;
-}
-
-// ── Modal de seleção de ativos ───────────────────────────────────────────────
-interface AssetPickerProps {
-  open: boolean;
-  onClose: () => void;
-  selectedIndex: number;
-  onSelect: (index: number) => void;
-}
-
-function AssetPicker({ open, onClose, selectedIndex, onSelect }: AssetPickerProps) {
-  const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState<typeof CATEGORIES[number]>("Todos");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open) {
-      setSearch("");
-      setActiveCategory("Todos");
-      setTimeout(() => inputRef.current?.focus(), 80);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  const filtered = ASSETS.filter((a) => {
-    const matchCat = activeCategory === "Todos" || a.category === activeCategory;
-    const q = search.toLowerCase();
-    const matchQ = !q || a.symbol.toLowerCase().includes(q) || a.name.toLowerCase().includes(q);
-    return matchCat && matchQ;
-  });
-
-  const categoryColors: Record<string, string> = {
-    Forex: "text-blue-400",
-    Cripto: "text-orange-400",
-    "Ações BR": "text-green-400",
-    "Ações US": "text-purple-400",
-    Commodities: "text-yellow-400",
-  };
-
-  if (!open) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col"
-        style={{
-          background: "linear-gradient(180deg, #0d1120 0%, #080c18 100%)",
-          border: "1px solid rgba(255,255,255,0.09)",
-          boxShadow: "0 32px 64px rgba(0,0,0,0.6)",
-          maxHeight: "80vh",
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4">
-          <div>
-            <h2 className="text-base font-bold text-white tracking-tight">Selecionar Ativo</h2>
-            <p className="text-[11px] text-white/35 mt-0.5">{ASSETS.length} ativos OTC disponíveis</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-white/[0.08]"
-          >
-            <X className="w-4 h-4 text-white/50" />
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="px-5 pb-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
-            <input
-              ref={inputRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar ativo..."
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 outline-none"
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.09)",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Category tabs */}
-        <div className="px-5 pb-3 flex gap-1.5 overflow-x-auto scrollbar-none">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
-                activeCategory === cat
-                  ? "text-white"
-                  : "text-white/35 hover:text-white/60"
-              )}
-              style={
-                activeCategory === cat
-                  ? { background: "rgba(59,130,246,0.25)", border: "1px solid rgba(59,130,246,0.4)" }
-                  : { background: "rgba(255,255,255,0.04)", border: "1px solid transparent" }
-              }
-            >
-              {cat}
-              {cat !== "Todos" && (
-                <span className="ml-1.5 text-[10px] opacity-50">
-                  {ASSETS.filter((a) => a.category === cat).length}
-                </span>
-              )}
+    if (!open) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className="w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col"
+          style={{ background: "linear-gradient(180deg,#0d1120 0%,#080c18 100%)", border: "1px solid rgba(255,255,255,0.09)", boxShadow: "0 32px 64px rgba(0,0,0,0.6)", maxHeight: "80vh" }}>
+          <div className="flex items-center justify-between px-5 pt-5 pb-4">
+            <div>
+              <h2 className="text-base font-bold text-white tracking-tight">Selecionar Ativo</h2>
+              <p className="text-[11px] text-white/35 mt-0.5">{ASSETS.length} ativos OTC disponíveis</p>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-white/[0.08]">
+              <X className="w-4 h-4 text-white/50" />
             </button>
-          ))}
-        </div>
-
-        {/* Asset grid */}
-        <div className="px-5 pb-5 overflow-y-auto flex-1">
-          {filtered.length === 0 ? (
-            <div className="text-center py-10 text-white/25 text-sm">Nenhum ativo encontrado</div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {filtered.map((a, _) => {
-                const globalIdx = ASSETS.indexOf(a);
-                const isSelected = globalIdx === selectedIndex;
-                return (
-                  <button
-                    key={a.symbol}
-                    onClick={() => { onSelect(globalIdx); onClose(); }}
-                    className={cn(
-                      "text-left p-3 rounded-xl transition-all group",
-                      isSelected ? "ring-1" : "hover:bg-white/[0.05]"
-                    )}
-                    style={
-                      isSelected
-                        ? { background: "rgba(59,130,246,0.14)", borderColor: "rgba(59,130,246,0.4)", border: "1px solid rgba(59,130,246,0.4)" }
-                        : { border: "1px solid rgba(255,255,255,0.05)" }
-                    }
-                  >
-                    <div className="flex items-start justify-between gap-1">
-                      <p className="text-xs font-bold text-white leading-tight">{a.symbol}</p>
-                      {isSelected && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0 mt-0.5" />
-                      )}
-                    </div>
-                    <p className={cn("text-[10px] mt-0.5 font-medium", categoryColors[a.category] ?? "text-white/40")}>
-                      {a.category}
-                    </p>
-                    <p className="text-[10px] text-white/30 mt-1 font-mono">{a.startPrice.toLocaleString()}</p>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Página principal ─────────────────────────────────────────────────────────
-export default function BinaryOptions() {
-  const { activeAccount, withdraw, depositFunds, accounts } = useTrading();
-  const { charts } = useChart();
-
-  const [selectedAsset, setSelectedAsset] = useState(() => {
-    const saved = localStorage.getItem("tradeai_binary_asset");
-    const idx = saved ? parseInt(saved, 10) : 0;
-    return Number.isNaN(idx) || idx >= ASSETS.length ? 0 : idx;
-  });
-  const [candles, setCandles] = useState<Candle[]>(() => {
-    const saved = localStorage.getItem("tradeai_binary_asset");
-    const idx = saved ? parseInt(saved, 10) : 0;
-    const safeIdx = Number.isNaN(idx) || idx >= ASSETS.length ? 0 : idx;
-    return generateFallbackCandles(60, ASSETS[safeIdx].startPrice);
-  });
-  const [currentPrice, setCurrentPrice] = useState(() => {
-    const saved = localStorage.getItem("tradeai_binary_asset");
-    const idx = saved ? parseInt(saved, 10) : 0;
-    const safeIdx = Number.isNaN(idx) || idx >= ASSETS.length ? 0 : idx;
-    return ASSETS[safeIdx].startPrice;
-  });
-  const [amount, setAmount] = useState("");
-  const [timeframe, setTimeframe] = useState<number>(60);
-  const [balance, setBalance] = useState(accounts[activeAccount].balance);
-  const [trades, setTrades] = useState<BinaryTrade[]>([]);
-  const [closedTrades, setClosedTrades] = useState<BinaryTrade[]>([]);
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  const tradesRef = useRef<BinaryTrade[]>([]);
-  const currentPriceRef = useRef(currentPrice);
-  const seededRef = useRef(false);
-
-  const asset = ASSETS[selectedAsset];
-  const numAmount = parseFloat(amount) || 0;
-  const currentTrade = trades.length > 0 && trades[trades.length - 1].status === "open" ? trades[trades.length - 1] : null;
-
-  useEffect(() => { setBalance(accounts[activeAccount].balance); }, [accounts, activeAccount]);
-  useEffect(() => { tradesRef.current = trades; }, [trades]);
-  useEffect(() => { currentPriceRef.current = currentPrice; }, [currentPrice]);
-
-  // Ao trocar ativo: reseta seed flag, mostra fallback e busca IMEDIATAMENTE do servidor
-  useEffect(() => {
-    seededRef.current = false;
-    const fallback = generateFallbackCandles(60, asset.startPrice);
-    setCandles(fallback);
-    setCurrentPrice(asset.startPrice);
-    currentPriceRef.current = asset.startPrice;
-
-    fetch(`/api/charts/history/${encodeURIComponent(asset.symbol)}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (!data || !data.candles || data.candles.length === 0) return;
-        if (seededRef.current) return;
-        const serverCandles: Candle[] = data.candles.map((c: any) => ({
-          time: c.time,
-          timestamp: c.timestamp ?? Date.now(),
-          open: c.open,
-          close: c.close,
-          high: c.high,
-          low: c.low,
-        }));
-        const last = serverCandles[serverCandles.length - 1];
-        setCandles(serverCandles.slice(-60));
-        setCurrentPrice(last.close);
-        currentPriceRef.current = last.close;
-        seededRef.current = true;
-      })
-      .catch(() => {});
-  }, [asset.symbol, asset.startPrice]);
-
-  // Quando dados do ChartContext chegam (SSE contínuo): override se ainda não foi semeado
-  useEffect(() => {
-    if (seededRef.current) return;
-    const serverChart = charts[asset.symbol];
-    if (serverChart && serverChart.data.length > 0) {
-      const serverCandles = serverChart.data.map((c) => ({
-        time: c.time,
-        timestamp: c.timestamp ?? Date.now(),
-        open: c.open,
-        close: c.close,
-        high: c.high,
-        low: c.low,
-      }));
-      setCandles(serverCandles.slice(-60));
-      setCurrentPrice(serverChart.currentPrice);
-      currentPriceRef.current = serverChart.currentPrice;
-      seededRef.current = true;
-    }
-  }, [charts, asset.symbol]);
-
-  // ── Lógica de atualização de preço: INALTERADA ───────────────────────────
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCandles((prevCandles) => {
-        const lastCandle = prevCandles[prevCandles.length - 1];
-        let newClose = lastCandle.close;
-
-        if (currentTrade) {
-          const shouldGoAgainst = currentTrade.betPercentage >= 50;
-          newClose = generatePriceMovement(lastCandle.close, currentTrade.direction, currentTrade.betPercentage, shouldGoAgainst);
-        } else {
-          const change = (Math.random() - 0.5) * lastCandle.close * 0.008;
-          newClose = parseFloat((lastCandle.close + change).toFixed(4));
-        }
-
-        const newHigh = Math.max(lastCandle.close, newClose) + Math.random() * Math.abs(newClose - lastCandle.close) * 0.5;
-        const newLow = Math.min(lastCandle.close, newClose) - Math.random() * Math.abs(newClose - lastCandle.close) * 0.5;
-
-        const newCandle: Candle = {
-          time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-          timestamp: Date.now(),
-          open: lastCandle.close,
-          close: newClose,
-          high: parseFloat(newHigh.toFixed(4)),
-          low: parseFloat(newLow.toFixed(4)),
-        };
-
-        setCurrentPrice(newClose);
-        currentPriceRef.current = newClose;
-        const appended = [...prevCandles, newCandle];
-        return appended.length > 600 ? appended.slice(-600) : appended;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [currentTrade]);
-
-  // ── Lógica de expiração de trade: INALTERADA ─────────────────────────────
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const openTrades = tradesRef.current.filter(t => t.status === "open");
-      openTrades.forEach((trade) => {
-        if (now >= trade.expiryTime) {
-          const finalPrice = currentPriceRef.current;
-          const won = (trade.direction === "UP" && finalPrice > trade.entryPrice) ||
-            (trade.direction === "DOWN" && finalPrice < trade.entryPrice);
-          if (won) {
-            depositFunds(trade.account, trade.amount * 2);
-            setBalance((prev) => prev + trade.amount * 2);
-            toast.success(`🎉 Vitória! +R$ ${(trade.amount * 2).toFixed(2)}`);
-          } else {
-            toast.error(`❌ Derrota! -R$ ${trade.amount.toFixed(2)}`);
-          }
-          setTrades((prevTrades) => {
-            const updated = prevTrades.filter(t => t.id !== trade.id);
-            setClosedTrades((prev) => [...prev, { ...trade, status: won ? "won" : "lost", pnl: won ? trade.amount : -trade.amount }]);
-            return updated;
-          });
-        }
-      });
-    }, 100);
-    return () => clearInterval(interval);
-  }, [depositFunds]);
-
-  // ── Lógica de abertura de trade: INALTERADA ──────────────────────────────
-  const handleTrade = (direction: "UP" | "DOWN") => {
-    if (!amount || numAmount <= 0) { toast.error("Informe um valor de aposta válido"); return; }
-    if (numAmount > balance) { toast.error(`Saldo insuficiente. Você tem R$ ${balance.toFixed(2)}`); return; }
-    if (currentTrade) { toast.error("Você já tem uma operação aberta"); return; }
-
-    const betPercentage = (numAmount / accounts[activeAccount].initialBalance) * 100;
-    const success = withdraw(activeAccount, numAmount);
-    if (!success) { toast.error("Falha ao debitar saldo"); return; }
-
-    setBalance((prev) => prev - numAmount);
-    const now = Date.now();
-    const newTrade: BinaryTrade = {
-      id: `trade_${now}`,
-      asset: asset.symbol,
-      direction,
-      entryPrice: currentPrice,
-      entryTime: now,
-      expiryTime: now + timeframe * 1000,
-      amount: numAmount,
-      status: "open",
-      pnl: 0,
-      account: activeAccount,
-      betPercentage,
-    };
-    setTrades((prev) => [...prev, newTrade]);
-    setAmount("");
-
-    if (betPercentage >= 90) toast.warning(`⚠️ ALL-IN! ${betPercentage.toFixed(0)}% — gráfico vai FORTEMENTE contra!`);
-    else if (betPercentage >= 50) toast.warning(`⚠️ Aposta grande: ${betPercentage.toFixed(0)}% — gráfico vai contra!`);
-    else if (betPercentage >= 10) toast.info(`📊 Aposta média: ${betPercentage.toFixed(0)}%`);
-    else toast.success(`✅ Aposta pequena: ${betPercentage.toFixed(0)}% — a favor!`);
-  };
-
-  const handleSelectAsset = (idx: number) => {
-    setSelectedAsset(idx);
-    localStorage.setItem("tradeai_binary_asset", String(idx));
-  };
-
-  const shouldShowAgainstIndicator = currentTrade && currentTrade.betPercentage >= 50;
-  const timeRemaining = currentTrade ? Math.max(0, Math.ceil((currentTrade.expiryTime - Date.now()) / 1000)) : 0;
-
-  const categoryColors: Record<string, string> = {
-    Forex: "text-blue-400",
-    Cripto: "text-orange-400",
-    "Ações BR": "text-green-400",
-    "Ações US": "text-purple-400",
-    Commodities: "text-yellow-400",
-  };
-
-  return (
-    <Layout>
-      <AssetPicker
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        selectedIndex={selectedAsset}
-        onSelect={handleSelectAsset}
-      />
-
-      <div className="p-4 lg:p-6 space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-white">Opções Binárias OTC</h1>
-            <p className="text-xs text-white/35 mt-0.5">Operações com inspiração automática</p>
           </div>
-          {currentTrade && (
-            <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border",
-              shouldShowAgainstIndicator
-                ? "bg-red-500/10 border-red-500/30 text-red-400"
-                : "bg-green-500/10 border-green-500/30 text-green-400")}>
-              <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", shouldShowAgainstIndicator ? "bg-red-400" : "bg-green-400")} />
-              {shouldShowAgainstIndicator ? "Gráfico contra você" : "Gráfico a seu favor"}
-            </div>
-          )}
-        </div>
-
-        {/* Asset selector bar */}
-        <button
-          onClick={() => setPickerOpen(true)}
-          className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all hover:bg-white/[0.06] active:scale-[0.995] group"
-          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.3)" }}
-            >
-              <Activity className="w-4 h-4 text-blue-400" />
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-bold text-white leading-tight">{asset.symbol} OTC</p>
-              <p className={cn("text-[11px] font-medium", categoryColors[asset.category] ?? "text-white/40")}>
-                {asset.name} · {asset.category}
-              </p>
+          <div className="px-5 pb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+              <input ref={inputRef} value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar ativo..." className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm text-white placeholder-white/25 outline-none"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }} />
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-mono text-white/60">{currentPrice.toFixed(4)}</p>
-              <p className="text-[10px] text-white/30">{ASSETS.length} ativos disponíveis</p>
-            </div>
-            <div
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-300 transition-all group-hover:bg-blue-500/20"
-              style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)" }}
-            >
-              <ChevronDown className="w-3.5 h-3.5" />
-              Trocar
-            </div>
-          </div>
-        </button>
-
-        {/* Chart + Operation panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          {/* Gráfico Canvas */}
-          <div className="lg:col-span-2 rounded-2xl overflow-hidden"
-            style={{ background: "#080c18", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <div className="px-4 pt-3 pb-1 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-white">{asset.symbol} OTC</span>
-                <span
-                  className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium", categoryColors[asset.category] ?? "text-white/40")}
-                  style={{ background: "rgba(255,255,255,0.05)" }}
-                >
-                  {asset.category}
-                </span>
-                <span className="text-xs font-mono text-white/50">{currentPrice.toFixed(4)}</span>
-              </div>
-              {currentTrade && (
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-3 h-3 text-white/40" />
-                  <span className={cn("text-xs font-bold font-mono", timeRemaining <= 10 ? "text-red-400 animate-pulse" : "text-white/60")}>
-                    {timeRemaining}s
-                  </span>
-                </div>
-              )}
-            </div>
-            <BinaryChart candles={candles} currentPrice={currentPrice}
-              entryPrice={currentTrade?.entryPrice} direction={currentTrade?.direction}
-              timeframeSeconds={timeframe} />
-          </div>
-
-          {/* Painel de operação */}
-          <div className="rounded-2xl p-4 space-y-4"
-            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <div>
-              <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Saldo</p>
-              <p className="text-2xl font-bold text-green-400 font-mono">R$ {balance.toFixed(2)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-white/40 uppercase tracking-widest mb-2">Expiração</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {TIMEFRAMES.map((tf) => (
-                  <button key={tf.value} onClick={() => setTimeframe(tf.value)}
-                    className={cn("py-2 rounded-lg text-xs font-semibold transition-all border",
-                      timeframe === tf.value ? "text-blue-300 border-blue-500/40" : "text-white/35 border-white/[0.08] hover:text-white/60 hover:bg-white/[0.05]")}
-                    style={timeframe === tf.value ? { background: "rgba(59,130,246,0.2)" } : {}}>
-                    {tf.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <Label className="text-[10px] text-white/40 uppercase tracking-widest mb-2 block">Valor (R$)</Label>
-              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
-                className="font-mono" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "white" }} />
-            </div>
-            <div className="grid grid-cols-4 gap-1.5">
-              {[10, 25, 50, 100].map((v) => (
-                <button key={v} onClick={() => setAmount(Math.min(v, balance).toString())}
-                  className="py-1.5 rounded-lg text-[10px] font-semibold text-white/50 transition-all hover:text-white/80"
-                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                  {v}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <button onClick={() => handleTrade("UP")} disabled={!!currentTrade}
-                className={cn("py-4 rounded-xl font-bold text-sm transition-all flex flex-col items-center gap-1",
-                  currentTrade ? "opacity-40 cursor-not-allowed" : "hover:scale-105 active:scale-95")}
-                style={{ background: currentTrade ? "rgba(34,197,94,0.1)" : "linear-gradient(135deg, #22c55e, #16a34a)", border: "1px solid rgba(34,197,94,0.4)" }}>
-                <TrendingUp className="w-5 h-5" />
-                <span>SUBIR</span>
+          <div className="px-5 pb-3 flex gap-1.5 overflow-x-auto scrollbar-none">
+            {CATEGORIES.map((cat) => (
+              <button key={cat} onClick={() => setActiveCategory(cat)}
+                className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all",
+                  activeCategory === cat ? "text-white" : "text-white/35 hover:text-white/60")}
+                style={activeCategory === cat
+                  ? { background: "rgba(59,130,246,0.25)", border: "1px solid rgba(59,130,246,0.4)" }
+                  : { background: "rgba(255,255,255,0.04)", border: "1px solid transparent" }}>
+                {cat}{cat !== "Todos" && <span className="ml-1.5 text-[10px] opacity-50">{ASSETS.filter(a => a.type === cat).length}</span>}
               </button>
-              <button onClick={() => handleTrade("DOWN")} disabled={!!currentTrade}
-                className={cn("py-4 rounded-xl font-bold text-sm transition-all flex flex-col items-center gap-1",
-                  currentTrade ? "opacity-40 cursor-not-allowed" : "hover:scale-105 active:scale-95")}
-                style={{ background: currentTrade ? "rgba(239,68,68,0.1)" : "linear-gradient(135deg, #ef4444, #dc2626)", border: "1px solid rgba(239,68,68,0.4)" }}>
-                <TrendingDown className="w-5 h-5" />
-                <span>CAIR</span>
-              </button>
-            </div>
-
-            {currentTrade && (
-              <div className="p-3 rounded-xl space-y-1.5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Entrada</span>
-                  <span className="text-white font-mono">{currentTrade.entryPrice.toFixed(4)}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Direção</span>
-                  <span className={currentTrade.direction === "UP" ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
-                    {currentTrade.direction === "UP" ? "▲ SUBIR" : "▼ CAIR"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/40">Expira em</span>
-                  <span className={cn("font-mono font-bold", timeRemaining <= 10 ? "text-red-400 animate-pulse" : "text-white")}>
-                    {timeRemaining}s
-                  </span>
-                </div>
-                <div className="w-full bg-white/5 h-1 rounded-full overflow-hidden mt-2">
-                  <div className="bg-blue-500 h-full transition-all duration-1000"
-                    style={{ width: `${(timeRemaining / timeframe) * 100}%` }} />
-                </div>
+            ))}
+          </div>
+          <div className="px-5 pb-5 overflow-y-auto flex-1">
+            {filtered.length === 0 ? (
+              <div className="text-center py-10 text-white/25 text-sm">Nenhum ativo encontrado</div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {filtered.map((a) => {
+                  const globalIdx = ASSETS.indexOf(a);
+                  const isSelected = globalIdx === selectedIndex;
+                  return (
+                    <button key={a.symbol} onClick={() => { onSelect(globalIdx); onClose(); }}
+                      className={cn("text-left p-3 rounded-xl transition-all", isSelected ? "ring-1" : "hover:bg-white/[0.05]")}
+                      style={isSelected
+                        ? { background: `${a.color}14`, border: `1px solid ${a.color}50` }
+                        : { border: "1px solid rgba(255,255,255,0.05)" }}>
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-xs font-bold text-white leading-tight">{a.symbol}</p>
+                        {isSelected && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: a.color }} />}
+                      </div>
+                      <p className="text-[10px] mt-0.5 font-medium text-white/50">{a.type}</p>
+                      <p className="text-[10px] text-white/30 mt-1 font-mono">{a.startPrice.toLocaleString()}</p>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
+      </div>
+    );
+  }
 
-        {/* Histórico */}
-        {closedTrades.length > 0 && (
-          <div className="rounded-2xl p-4"
-            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <h3 className="text-sm font-bold text-white mb-3">Histórico ({closedTrades.length})</h3>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {closedTrades.slice().reverse().map((t) => (
-                <div key={t.id} className="flex items-center justify-between p-3 rounded-lg"
-                  style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div>
-                    <p className="text-xs font-semibold text-white">
-                      {t.direction === "UP" ? "▲" : "▼"} {t.asset} OTC
-                    </p>
-                    <p className="text-[10px] text-white/40">{t.amount.toFixed(2)} · {t.entryPrice.toFixed(4)}</p>
-                  </div>
-                  <span className={cn("text-xs font-bold", t.status === "won" ? "text-green-400" : "text-red-400")}>
-                    {t.status === "won" ? `+R$ ${(t.amount).toFixed(2)}` : `-R$ ${t.amount.toFixed(2)}`}
-                  </span>
-                </div>
-              ))}
+  // ── Página principal ─────────────────────────────────────────────────────────
+  export default function BinaryOptions() {
+    const { activeAccount, openBinaryOption, closeBinaryOption, updateOptionPrice, accounts, getAccountBalance, getManipulationFactor } = useTrading();
+    const { charts } = useChart();
+
+    const [pickerOpen, setPickerOpen] = useState(false);
+    const [selectedAsset, setSelectedAsset] = useState(() => {
+      const saved = localStorage.getItem("tradeai_binary_asset");
+      const idx = saved ? parseInt(saved, 10) : 0;
+      return Number.isNaN(idx) || idx >= ASSETS.length ? 0 : idx;
+    });
+    const [chartData, setChartData] = useState(() => {
+      const saved = localStorage.getItem("tradeai_binary_asset");
+      const idx = saved ? parseInt(saved, 10) : 0;
+      const safeIdx = Number.isNaN(idx) || idx >= ASSETS.length ? 0 : idx;
+      const sym = ASSETS[safeIdx].symbol;
+      try {
+        const storedRaw = localStorage.getItem(`tradeai_binary_chart_v2_${sym}`);
+        if (storedRaw) {
+          const stored = JSON.parse(storedRaw);
+          if (stored.symbol === sym && stored.data?.length > 0 && Date.now() - stored.savedAt < 600000) return stored.data;
+        }
+      } catch { /* ignorar */ }
+      return generatePriceData(80, ASSETS[safeIdx].startPrice);
+    });
+    const [currentPrice, setCurrentPrice] = useState(() => {
+      const saved = localStorage.getItem("tradeai_binary_asset");
+      const idx = saved ? parseInt(saved, 10) : 0;
+      const safeIdx = Number.isNaN(idx) || idx >= ASSETS.length ? 0 : idx;
+      return ASSETS[safeIdx].startPrice;
+    });
+    const [priceChange, setPriceChange] = useState(0);
+    const [direction, setDirection] = useState<"call" | "put">("call");
+    const [betAmount, setBetAmount] = useState("");
+    const [expirationTime, setExpirationTime] = useState(60);
+
+    const seededRef = useRef(false);
+    const saveCounterRef = useRef(0);
+
+    const asset = ASSETS[selectedAsset] || ASSETS[0];
+    const balance = getAccountBalance(activeAccount) || 0;
+    const account = accounts[activeAccount] || accounts.demo;
+    const numBet = parseFloat(betAmount) || 0;
+    const payout = numBet * 1.9;
+
+    const handleSelectAsset = (idx: number) => {
+      setSelectedAsset(idx);
+      localStorage.setItem("tradeai_binary_asset", String(idx));
+    };
+
+    // Ao trocar ativo: restaura do localStorage ou gera fallback
+    useEffect(() => {
+      seededRef.current = false;
+      saveCounterRef.current = 0;
+      try {
+        const storedRaw = localStorage.getItem(`tradeai_binary_chart_v2_${asset.symbol}`);
+        if (storedRaw) {
+          const stored = JSON.parse(storedRaw);
+          if (stored.symbol === asset.symbol && stored.data?.length > 0 && Date.now() - stored.savedAt < 600000) {
+            setChartData(stored.data);
+            setCurrentPrice(stored.data[stored.data.length - 1].price);
+            setPriceChange(0);
+            return;
+          }
+        }
+      } catch { /* ignorar */ }
+      const fallback = generatePriceData(80, asset.startPrice);
+      setChartData(fallback);
+      setCurrentPrice(asset.startPrice);
+      setPriceChange(0);
+    }, [asset.symbol, asset.startPrice]);
+
+    // Servidor SSE (override único)
+    useEffect(() => {
+      if (seededRef.current) return;
+      const serverChart = charts[asset.symbol];
+      if (serverChart && serverChart.data.length > 0) {
+        setChartData(serverChart.data);
+        setCurrentPrice(serverChart.currentPrice);
+        setPriceChange(serverChart.priceChange);
+        seededRef.current = true;
+      }
+    }, [charts, asset.symbol]);
+
+    // ── Geração de preço com manipulação — IDÊNTICA ao Trade.tsx ─────────────
+    useEffect(() => {
+      const interval = setInterval(() => {
+        setChartData((prev) => {
+          if (!prev || prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          const first = prev[0];
+          const manipulation = getManipulationFactor(activeAccount) || { shouldWin: false, intensity: 0 };
+          const baseVolatility = 0.0010;
+          const u1 = Math.random(), u2 = Math.random();
+          const gaussianNoise = Math.sqrt(-2 * Math.log(Math.max(u1, 0.0001))) * Math.cos(2 * Math.PI * u2);
+          let drift = 0;
+
+          if (account && account.positions && account.positions.length > 0) {
+            const pos = account.positions[0];
+            const totalDuration = pos.expiresAt ? (pos.expiresAt - pos.entryTime.getTime()) : 60000;
+            const timeRemaining = (pos.expiresAt || 0) - Date.now();
+            const timeElapsed = totalDuration - timeRemaining;
+            const progress = Math.min(1, Math.max(0, timeElapsed / totalDuration));
+            const isCallType = pos.type === "call";
+            const priceVsEntry = last.price - pos.entryPrice;
+            const currentlyWinning = (isCallType && priceVsEntry > 0) || (!isCallType && priceVsEntry < 0);
+            const shouldWin = manipulation.shouldWin;
+            const targetUp = shouldWin ? isCallType : !isCallType;
+
+            if (progress < 0.80) {
+              drift = (targetUp ? 1 : -1) * manipulation.intensity * 0.000045;
+            } else {
+              if (currentlyWinning === shouldWin) {
+                drift = (targetUp ? 1 : -1) * 0.000025;
+              } else {
+                const lateProgress = (progress - 0.80) / 0.20;
+                drift = (targetUp ? 1 : -1) * (0.00018 + lateProgress * 0.00055);
+              }
+            }
+          }
+
+          const priceMove = last.price * (drift + baseVolatility * gaussianNoise * 0.4);
+          const newPrice = parseFloat((last.price + priceMove).toFixed(4));
+          const now = new Date();
+          const wickSize = Math.abs(priceMove) * (0.3 + Math.random() * 0.4);
+          const newPoint = {
+            time: now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+            open: last.price, close: newPrice,
+            high: Math.max(last.price, newPrice) + wickSize,
+            low: Math.min(last.price, newPrice) - Math.max(wickSize * 0.5, 0.0001),
+            price: newPrice,
+            volume: Math.floor(Math.random() * 80000 + 20000),
+          };
+
+          const appended = [...prev, newPoint];
+          const updated = appended.length > 2000 ? appended.slice(-2000) : appended;
+
+          saveCounterRef.current++;
+          if (saveCounterRef.current % 30 === 0) {
+            try {
+              localStorage.setItem(`tradeai_binary_chart_v2_${asset.symbol}`, JSON.stringify({
+                symbol: asset.symbol, data: updated.slice(-300), savedAt: Date.now(),
+              }));
+            } catch { /* ignorar */ }
+          }
+
+          setCurrentPrice(newPrice);
+          if (first) setPriceChange(((newPrice - first.price) / first.price) * 100);
+
+          if (account && account.positions) {
+            account.positions.forEach((pos) => {
+              updateOptionPrice(activeAccount, pos.id, newPrice);
+              if (pos.expiresAt && Date.now() >= pos.expiresAt) {
+                closeBinaryOption(activeAccount, pos.id, newPrice);
+                const isWin = (pos.type === "call" && newPrice > pos.entryPrice) ||
+                  (pos.type === "put" && newPrice < pos.entryPrice);
+                if (isWin) toast.success(`✅ VITÓRIA! Ganhou R$ ${(pos.betAmount * 0.9).toFixed(2)}`);
+                else toast.error(`❌ DERROTA! Perdeu R$ ${pos.betAmount.toFixed(2)}`);
+              }
+            });
+          }
+
+          return updated;
+        });
+      }, 1000);
+      return () => clearInterval(interval);
+    }, [activeAccount, account, updateOptionPrice, closeBinaryOption, getManipulationFactor, asset.symbol]);
+
+    const handleTrade = useCallback(() => {
+      if (numBet <= 0) { toast.error("Informe um valor válido"); return; }
+      if (numBet > balance) { toast.error("Saldo insuficiente"); return; }
+      const betPercentage = (numBet / balance) * 100;
+      if (betPercentage >= 60) toast.warning("⚠️ ALTO RISCO: Aposta acima de 60% do saldo!");
+      openBinaryOption(
+        activeAccount,
+        { type: direction, asset: asset.symbol, betAmount: numBet, entryPrice: currentPrice, entryTime: new Date(), currentPrice },
+        expirationTime
+      );
+      setBetAmount("");
+      toast.success(`${direction === "call" ? "📈 CALL" : "📉 PUT"} aberto! Expira em ${expirationTime}s`);
+    }, [direction, numBet, balance, activeAccount, asset.symbol, currentPrice, openBinaryOption, expirationTime]);
+
+    const isPositive = priceChange >= 0;
+
+    return (
+      <Layout>
+        <AssetPicker open={pickerOpen} onClose={() => setPickerOpen(false)}
+          selectedIndex={selectedAsset} onSelect={handleSelectAsset} />
+
+        <div className="p-4 lg:p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "Sora, sans-serif" }}>Opções Binárias OTC</h1>
+              <p className="text-sm text-white/40 mt-0.5">Operações com inspiração automática</p>
             </div>
           </div>
-        )}
-      </div>
-    </Layout>
-  );
-}
+
+          {/* Seletor de ativo — botão que abre modal */}
+          <button onClick={() => setPickerOpen(true)}
+            className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all hover:bg-white/[0.06] active:scale-[0.995] group"
+            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: `${asset.color}20`, border: `1px solid ${asset.color}40` }}>
+                <Activity className="w-4 h-4" style={{ color: asset.color }} />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-bold text-white leading-tight">{asset.symbol} OTC</p>
+                <p className="text-[11px] font-medium text-white/40">{asset.name} · {asset.type}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden sm:block">
+                <p className="text-xs font-mono text-white/60">{currentPrice.toFixed(4)}</p>
+                <p className="text-[10px] text-white/30">{ASSETS.length} ativos disponíveis</p>
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-300 transition-all group-hover:bg-blue-500/20"
+                style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)" }}>
+                <ChevronDown className="w-3.5 h-3.5" /> Trocar
+              </div>
+            </div>
+          </button>
+
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+            {/* Chart */}
+            <div className="xl:col-span-3 space-y-4">
+              <div className="glass-card rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${asset.color}20` }}>
+                      <Activity className="w-5 h-5" style={{ color: asset.color }} />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-white">{asset.symbol} OTC</h2>
+                      <p className="text-[10px] text-white/40">{asset.name}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-white font-mono">{currentPrice.toFixed(4)}</p>
+                    <p className={cn("text-sm font-semibold flex items-center justify-end gap-1", isPositive ? "text-green-400" : "text-red-400")}>
+                      {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                      {isPositive ? "+" : ""}{priceChange.toFixed(2)}%
+                    </p>
+                  </div>
+                </div>
+
+                <ProfessionalChart
+                  data={chartData}
+                  currentPrice={currentPrice}
+                  assetColor={asset.color}
+                  assetSymbol={`${asset.symbol} OTC`}
+                  isPositive={isPositive}
+                  priceChange={priceChange}
+                  entryPrice={account.positions.length > 0 ? account.positions[0].entryPrice : undefined}
+                  positionType={account.positions.length > 0 ? account.positions[0].type : undefined}
+                />
+              </div>
+            </div>
+
+            {/* Trading Panel — idêntico ao Trade.tsx */}
+            <div className="glass-card rounded-2xl p-5 space-y-6">
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <button onClick={() => setDirection("call")}
+                    className={cn("flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2",
+                      direction === "call" ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg shadow-green-500/20" : "bg-white/5 text-white/40 hover:bg-white/10")}>
+                    <TrendingUp className="w-4 h-4" /> CALL
+                  </button>
+                  <button onClick={() => setDirection("put")}
+                    className={cn("flex-1 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2",
+                      direction === "put" ? "bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/20" : "bg-white/5 text-white/40 hover:bg-white/10")}>
+                    <TrendingDown className="w-4 h-4" /> PUT
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs text-white/40">Valor da Aposta</Label>
+                  <div className="relative">
+                    <Input type="number" placeholder="0.00" value={betAmount}
+                      onChange={(e) => setBetAmount(e.target.value)}
+                      className="bg-white/5 border-white/10 text-white h-12 pl-10 font-mono" />
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20">R$</div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[10, 50, 100, 500].map((val) => (
+                      <button key={val} onClick={() => setBetAmount(Math.min(val, balance).toString())}
+                        className="py-1.5 rounded-lg bg-white/5 border border-white/5 text-[10px] text-white/60 hover:bg-white/10">
+                        {val}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs text-white/40">Expiração</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {EXPIRATION_TIMES.map((time) => (
+                      <button key={time.value} onClick={() => setExpirationTime(time.value)}
+                        className={cn("py-2 rounded-lg text-xs font-bold transition-all",
+                          expirationTime === time.value ? "bg-blue-500 text-white" : "bg-white/5 text-white/40 hover:bg-white/10")}>
+                        {time.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/3 border border-white/5 space-y-3">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/40">Saldo</span>
+                    <span className="text-white font-bold">R$ {(balance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/40">Payout (90%)</span>
+                    <span className="text-green-400 font-bold">+R$ {(payout || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/40">Risco</span>
+                    <span className={cn("font-bold", numBet > balance * 0.6 ? "text-red-400" : "text-white/60")}>
+                      {numBet > balance * 0.6 ? "ALTO" : "NORMAL"}
+                    </span>
+                  </div>
+                </div>
+
+                <Button onClick={handleTrade}
+                  className={cn("w-full h-14 rounded-2xl font-bold text-lg shadow-xl transition-all active:scale-95",
+                    direction === "call" ? "bg-gradient-to-r from-green-500 to-emerald-600 shadow-green-500/20" : "bg-gradient-to-r from-red-500 to-rose-600 shadow-red-500/20")}>
+                  {direction === "call" ? "📈 CALL" : "📉 PUT"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Operações Abertas */}
+          {account.positions.length > 0 && (
+            <div className="glass-card rounded-2xl p-5">
+              <h3 className="text-sm font-bold text-white mb-3">Operações Abertas ({account.positions.length})</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {account.positions.map((pos) => {
+                  const timeLeft = Math.max(0, Math.floor(((pos.expiresAt || 0) - Date.now()) / 1000));
+                  return (
+                    <div key={pos.id} className="p-4 rounded-xl space-y-3"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-2">
+                          <div className={cn("w-2 h-2 rounded-full animate-pulse", pos.type === "call" ? "bg-green-500" : "bg-red-500")} />
+                          <span className="text-xs font-bold text-white">
+                            {pos.type === "call" ? "📈 CALL" : "📉 PUT"} {pos.asset} OTC
+                          </span>
+                        </div>
+                        <Badge className="text-[10px] bg-blue-400/10 text-blue-400 border-blue-400/20">
+                          <Clock className="w-3 h-3 mr-1" /> {timeLeft}s
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <p className="text-white/30 uppercase">Entrada</p>
+                          <p className="text-white font-mono">R$ {pos.entryPrice.toFixed(4)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-white/30 uppercase">Atual</p>
+                          <p className="text-white font-mono">R$ {pos.currentPrice.toFixed(4)}</p>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t border-white/5">
+                        <p className="text-xs text-white/40">Aposta: R$ {pos.betAmount.toFixed(2)}</p>
+                        <div className="w-full bg-white/5 h-1 rounded-full mt-2 overflow-hidden">
+                          <div className="bg-blue-500 h-full transition-all duration-1000"
+                            style={{ width: `${(timeLeft / (pos.expiresAt ? (pos.expiresAt - pos.entryTime.getTime()) / 1000 : 60)) * 100}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Histórico */}
+          {account.closedPositions.length > 0 && (
+            <div className="glass-card rounded-2xl p-5">
+              <h3 className="text-sm font-bold text-white mb-3">Histórico ({account.closedPositions.length})</h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {account.closedPositions.slice().reverse().map((pos) => (
+                  <div key={pos.id} className="p-3 rounded-lg flex items-center justify-between"
+                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <div className="flex items-center gap-3 flex-1">
+                      <div>
+                        <p className="text-xs font-semibold text-white">
+                          {pos.type === "call" ? "📈" : "📉"} {pos.asset} OTC
+                        </p>
+                        <p className="text-[10px] text-white/40">
+                          R$ {pos.entryPrice.toFixed(4)} → R$ {pos.exitPrice?.toFixed(4)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {pos.result === "win" ? (
+                        <div className="flex items-center gap-1">
+                          <CheckCircle2 className="w-4 h-4 text-green-400" />
+                          <span className="text-xs font-bold text-green-400">+R$ {pos.payout?.toFixed(2)}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <AlertTriangle className="w-4 h-4 text-red-400" />
+                          <span className="text-xs font-bold text-red-400">-R$ {pos.betAmount.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Layout>
+    );
+  }
+  
