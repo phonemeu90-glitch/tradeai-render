@@ -653,7 +653,7 @@ export default function BinaryOptions() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-white">Opções Binárias OTC</h1>
-            <p className="text-xs text-white/35 mt-0.5">Gráfico persistente · Manipulação inteligente</p>
+            <p className="text-xs text-white/35 mt-0.5">Operações com inspiração automática</p>
           </div>
           {currentTrade && (
             <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border",
