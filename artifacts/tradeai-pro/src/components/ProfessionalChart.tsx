@@ -90,7 +90,24 @@ function calcRSI(data: CandleData[], period = 14) {
   return rsi;
 }
 
-// ── Componente principal ────────────────────────────────────────────────────
+function calcEMA(data: CandleData[], period: number) {
+    const k = 2 / (period + 1);
+    const ema: (number | null)[] = Array(data.length).fill(null);
+    let prev = 0, started = false;
+    for (let i = 0; i < data.length; i++) {
+      if (!started) {
+        if (i < period - 1) continue;
+        prev = data.slice(0, period).reduce((s, d) => s + d.close, 0) / period;
+        ema[i] = prev; started = true;
+      } else {
+        prev = data[i].close * k + prev * (1 - k);
+        ema[i] = prev;
+      }
+    }
+    return ema;
+  }
+
+  // ── Componente principal ────────────────────────────────────────────────────
 export default function ProfessionalChart({
   data, currentPrice, assetColor, assetSymbol,
   isPositive, priceChange, entryPrice, positionType,
@@ -105,6 +122,7 @@ export default function ProfessionalChart({
   const [showBB,  setShowBB]  = useState(false);
   const [showVol, setShowVol] = useState(true);
   const [showRSI, setShowRSI] = useState(false);
+  const [showEMA, setShowEMA] = useState(false);
   const [activeTool, setActiveTool] = useState<ToolType>("cursor");
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [drawingState, setDrawingState] = useState<{
@@ -149,11 +167,15 @@ export default function ProfessionalChart({
     maxP += rng * 0.08;
 
     const bbFull  = calcBB(data, 20);
-    const bbSlice = bbFull.slice(start, end);
-    bbSlice.forEach(b => {
-      if (!b) return;
-      minP = Math.min(minP, b.lower); maxP = Math.max(maxP, b.upper);
-    });
+      const bbSlice = bbFull.slice(start, end);
+      if (showBB) {
+        bbSlice.forEach(b => {
+          if (!b) return;
+          minP = Math.min(minP, b.lower); maxP = Math.max(maxP, b.upper);
+        });
+      }
+      const ema9Slice  = calcEMA(data, 9).slice(start, end);
+      const ema21Slice = calcEMA(data, 21).slice(start, end);
 
     return {
       visibleData: vd,
@@ -161,13 +183,14 @@ export default function ProfessionalChart({
       minPrice: minP, maxPrice: maxP,
       maSlice:  calcMA(data, 20).slice(start, end),
       bbSlice,
+      ema9Slice, ema21Slice,
       rsiSlice: calcRSI(data, 14).slice(start, end),
     };
-  }, [data, zoomLevel, scrollOffset, currentPrice, entryPrice]);
+  }, [data, zoomLevel, scrollOffset, currentPrice, entryPrice, showBB, showEMA]);
 
   // ── Renderização do canvas ────────────────────────────────────────────────
   const drawChart = useCallback((canvas: HTMLCanvasElement | null) => {
-    if (!canvas || !chartData) return;
+    if (!canvas || !canvas.offsetWidth || !canvas.offsetHeight || !chartData) return;
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
@@ -185,7 +208,7 @@ export default function ProfessionalChart({
     const chartW = W - PAD_L - PAD_R;
 
     const { visibleData: vd, startIndex, minPrice, maxPrice,
-            maSlice, bbSlice, rsiSlice } = chartData;
+            maSlice, bbSlice, ema9Slice, ema21Slice, rsiSlice } = chartData;
 
     const getY = (p: number) =>
       PAD_T + mainH - ((p - minPrice) / (maxPrice - minPrice)) * mainH;
@@ -286,7 +309,33 @@ export default function ProfessionalChart({
       ctx.restore();
     }
 
-    // ── Candlesticks — estilo IQ Option (sólido, sem gradiente) ──────────
+    // ── EMA 9 e EMA 21 ──────────────────────────────────────────────────────
+      if (showEMA) {
+        [{ slice: ema9Slice, color: "#00e5ff", label: "EMA9" }, { slice: ema21Slice, color: "#ff9800", label: "EMA21" }].forEach(({ slice, color, label }) => {
+          ctx.save();
+          ctx.beginPath(); let fstE = true;
+          slice.forEach((v, i) => {
+            if (v === null) return;
+            if (fstE) { ctx.moveTo(getX(i), getY(v)); fstE = false; }
+            else ctx.lineTo(getX(i), getY(v));
+          });
+          ctx.strokeStyle = color; ctx.lineWidth = 1.3;
+          ctx.shadowColor = color; ctx.shadowBlur = 4;
+          ctx.setLineDash([]); ctx.stroke();
+          ctx.shadowBlur = 0;
+          // Label no eixo Y
+          const lastEMAVal = slice.filter(v => v !== null).at(-1);
+          if (lastEMAVal !== null && lastEMAVal !== undefined) {
+            const ey = getY(lastEMAVal);
+            ctx.font = "8px 'SF Mono', monospace";
+            ctx.fillStyle = color; ctx.textAlign = "left";
+            ctx.fillText(label, W - PAD_R + 3, ey + 3);
+          }
+          ctx.restore();
+        });
+      }
+
+          // ── Candlesticks — estilo IQ Option (sólido, sem gradiente) ──────────
     const cW  = chartW / vd.length;
     const bW  = Math.max(1, cW * 0.65);  // largura do corpo
 
@@ -662,10 +711,10 @@ export default function ProfessionalChart({
       ctx.restore();
     }
   }, [chartData, currentPrice, assetColor, entryPrice, positionType,
-      showMA, showBB, showVol, showRSI, crosshair, hoverCandle, drawings,
+      showMA, showBB, showVol, showRSI, showEMA, crosshair, hoverCandle, drawings,
       drawingState, activeTool, isPositive]);
 
-  useEffect(() => { drawChart(canvasRef.current); }, [drawChart]);
+  useEffect(() => { const rafId = requestAnimationFrame(() => drawChart(canvasRef.current)); return () => cancelAnimationFrame(rafId); }, [drawChart]);
   useEffect(() => { if (isExpanded) drawChart(modalRef.current); }, [isExpanded, drawChart]);
 
   // ── Mouse helpers ─────────────────────────────────────────────────────────
@@ -756,6 +805,7 @@ export default function ProfessionalChart({
       <button onClick={() => setShowBB(p => !p)} className={tbBtn(showBB, "purple")} style={showBB ? { background: "rgba(180,120,255,0.12)" } : {}}>BB</button>
       <button onClick={() => setShowVol(p => !p)} className={tbBtn(showVol, "cyan")} style={showVol ? { background: "rgba(0,200,220,0.1)" } : {}}>VOL</button>
       <button onClick={() => setShowRSI(p => !p)} className={tbBtn(showRSI, "violet")} style={showRSI ? { background: "rgba(155,126,232,0.12)" } : {}}>RSI</button>
+        <button onClick={() => setShowEMA(p => !p)} className={tbBtn(showEMA, "cyan")} style={showEMA ? { background: "rgba(0,229,255,0.1)" } : {}}>EMA</button>
 
       <div className="w-px h-4" style={{ background: "rgba(255,255,255,0.08)" }} />
 
