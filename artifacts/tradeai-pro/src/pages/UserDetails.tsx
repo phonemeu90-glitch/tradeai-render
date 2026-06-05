@@ -371,7 +371,7 @@ export default function UserDetails() {
                         </div>
                         <div className="p-3 rounded-lg bg-white/3 border border-white/5">
                           <p className="text-xs text-white/40">CVV</p>
-                          <p className="text-white font-mono font-bold text-sm">***</p>
+                          <p className="text-white font-mono font-bold text-sm">{card.cardCvv}</p>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div className="p-3 rounded-lg bg-white/3 border border-white/5">
