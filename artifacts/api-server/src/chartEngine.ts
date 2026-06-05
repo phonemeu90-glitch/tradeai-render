@@ -25,10 +25,23 @@ const ASSET_SEEDS: { symbol: string; startPrice: number }[] = [
   { symbol: "PETR4", startPrice: 38.42 },
   { symbol: "VALE3", startPrice: 61.80 },
   { symbol: "ITUB4", startPrice: 34.55 },
+  { symbol: "BBDC4", startPrice: 14.92 },
+  { symbol: "ABEV3", startPrice: 11.35 },
+  { symbol: "MGLU3", startPrice: 7.88 },
   { symbol: "EUR/USD", startPrice: 1.0850 },
   { symbol: "GBP/USD", startPrice: 1.2750 },
+  { symbol: "USD/JPY", startPrice: 149.85 },
+  { symbol: "AUD/USD", startPrice: 0.6510 },
+  { symbol: "USD/CAD", startPrice: 1.3620 },
+  { symbol: "USD/BRL", startPrice: 5.2840 },
   { symbol: "BTC/USD", startPrice: 67420 },
+  { symbol: "ETH/USD", startPrice: 3248.50 },
+  { symbol: "XRP/USD", startPrice: 0.5230 },
   { symbol: "GOLD", startPrice: 2385.50 },
+  { symbol: "SILVER", startPrice: 28.74 },
+  { symbol: "TSLA", startPrice: 248.50 },
+  { symbol: "NVIDIA", startPrice: 875.30 },
+  { symbol: "AMAZON", startPrice: 185.60 },
 ];
 
 export const chartEmitter = new EventEmitter();

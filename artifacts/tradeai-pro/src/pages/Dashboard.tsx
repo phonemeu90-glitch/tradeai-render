@@ -1,130 +1,247 @@
 /**
- * Dashboard — Painel do Usuário com Integração de Autenticação
+ * Dashboard — Painel do Usuário com Animação de Trade
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import Layout from "@/components/Layout";
-import ExtraordinaryChart from "@/components/ExtraordinaryChart";
 import DepositNotification from "@/components/DepositNotification";
 import { useTrading } from "@/contexts/TradingContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useChart } from "@/contexts/ChartContext";
 import { useLocation } from "wouter";
 import {
-  TrendingUp, TrendingDown, DollarSign, Zap, ArrowUpRight,
-  ArrowDownRight, RefreshCw, Brain, Target, Activity, Wallet,
-  Plus, Minus, Eye, EyeOff, Clock, CheckCircle2, AlertTriangle, LogOut
+  TrendingUp, TrendingDown, Plus, Eye, EyeOff, CheckCircle2, LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-function generateCandleData(points: number, startPrice: number) {
-  const data = [];
-  let price = startPrice;
-  const now = new Date();
+// ── Animação de Trade ────────────────────────────────────────────────────────
+function TradeAnimation() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pricesRef = useRef<number[]>([]);
+  const frameRef = useRef<number>(0);
+  const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  for (let i = points; i >= 0; i--) {
-    const time = new Date(now.getTime() - i * 5 * 60 * 1000);
-    const open = price;
-    const change = (Math.random() - 0.46) * price * 0.02;
-    const close = open + change;
-    const high = Math.max(open, close) + Math.random() * price * 0.008;
-    const low = Math.min(open, close) - Math.random() * price * 0.008;
-    const volume = Math.floor(Math.random() * 50000 + 10000);
+  const TICKERS = [
+    { symbol: "EUR/USD OTC", price: 1.0850, color: "#3b82f6" },
+    { symbol: "BTC/USD OTC", price: 67420, color: "#f59e0b" },
+    { symbol: "GOLD OTC",    price: 2385.5, color: "#eab308" },
+    { symbol: "PETR4 OTC",   price: 38.42,  color: "#22c55e" },
+    { symbol: "ETH/USD OTC", price: 3248.5, color: "#8b5cf6" },
+  ];
+  const [tickIdx, setTickIdx] = useState(0);
+  const [livePrice, setLivePrice] = useState(TICKERS[0].price);
+  const [dir, setDir] = useState<"up" | "down">("up");
 
-    data.push({
-      time: time.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-      open: parseFloat(open.toFixed(2)),
-      close: parseFloat(close.toFixed(2)),
-      high: parseFloat(high.toFixed(2)),
-      low: parseFloat(low.toFixed(2)),
-      volume,
-      price: parseFloat(close.toFixed(2)),
-    });
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTickIdx((i) => (i + 1) % TICKERS.length);
+    }, 3200);
+    return () => clearInterval(t);
+  }, []);
 
-    price = close;
-  }
-  return data;
+  useEffect(() => {
+    setLivePrice(TICKERS[tickIdx].price);
+    pricesRef.current = [];
+  }, [tickIdx]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const W = canvas.width;
+    const H = canvas.height;
+    const color = TICKERS[tickIdx].color;
+
+    if (pricesRef.current.length === 0) {
+      let p = TICKERS[tickIdx].price;
+      for (let i = 0; i < 80; i++) {
+        p = p + (Math.random() - 0.48) * p * 0.003;
+        pricesRef.current.push(p);
+      }
+    }
+
+    const draw = () => {
+      const last = pricesRef.current[pricesRef.current.length - 1];
+      const change = (Math.random() - 0.48) * last * 0.003;
+      const next = last + change;
+      pricesRef.current.push(next);
+      if (pricesRef.current.length > 100) pricesRef.current.shift();
+
+      setLivePrice(parseFloat(next.toFixed(next > 100 ? 2 : 4)));
+      setDir(next >= last ? "up" : "down");
+
+      ctx.clearRect(0, 0, W, H);
+
+      const pts = pricesRef.current;
+      const min = Math.min(...pts);
+      const max = Math.max(...pts);
+      const range = max - min || 1;
+      const pad = 16;
+
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, color + "40");
+      grad.addColorStop(1, color + "00");
+
+      ctx.beginPath();
+      pts.forEach((v, i) => {
+        const x = pad + (i / (pts.length - 1)) * (W - pad * 2);
+        const y = H - pad - ((v - min) / range) * (H - pad * 2);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      const lastX = pad + ((pts.length - 1) / (pts.length - 1)) * (W - pad * 2);
+      const lastY = H - pad - ((pts[pts.length - 1] - min) / range) * (H - pad * 2);
+      ctx.lineTo(lastX, H - pad);
+      ctx.lineTo(pad, H - pad);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      ctx.beginPath();
+      pts.forEach((v, i) => {
+        const x = pad + (i / (pts.length - 1)) * (W - pad * 2);
+        const y = H - pad - ((v - min) / range) * (H - pad * 2);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 4, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 8, 0, Math.PI * 2);
+      ctx.fillStyle = color + "33";
+      ctx.fill();
+
+      frameRef.current = requestAnimationFrame(draw);
+    };
+
+    cancelAnimationFrame(frameRef.current);
+    frameRef.current = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frameRef.current);
+  }, [tickIdx]);
+
+  const ticker = TICKERS[tickIdx];
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl" style={{ background: "#080c18", border: "1px solid rgba(255,255,255,0.07)" }}>
+      <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: ticker.color }} />
+          <span className="text-sm font-bold text-white">{ticker.symbol}</span>
+          <span className="text-[10px] text-white/30 uppercase tracking-widest">AO VIVO</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className="text-lg font-bold font-mono"
+            style={{ color: ticker.color }}
+          >
+            {livePrice > 100
+              ? livePrice.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+              : livePrice.toFixed(4)}
+          </span>
+          <span className={cn("text-xs font-bold flex items-center gap-0.5", dir === "up" ? "text-green-400" : "text-red-400")}>
+            {dir === "up" ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+          </span>
+        </div>
+      </div>
+
+      <canvas
+        ref={canvasRef}
+        width={600}
+        height={140}
+        className="w-full"
+        style={{ display: "block" }}
+      />
+
+      <div className="px-5 pb-4 pt-2 flex gap-2 overflow-x-auto scrollbar-none">
+        {TICKERS.map((t, i) => (
+          <button
+            key={t.symbol}
+            onClick={() => setTickIdx(i)}
+            className={cn(
+              "flex-shrink-0 px-3 py-1 rounded-lg text-[11px] font-semibold transition-all border",
+              tickIdx === i
+                ? "text-white border-transparent"
+                : "text-white/40 border-white/[0.07] hover:text-white/70"
+            )}
+            style={tickIdx === i ? { background: t.color + "22", borderColor: t.color + "55", color: t.color } : {}}
+          >
+            {t.symbol.replace(" OTC", "")}
+          </button>
+        ))}
+      </div>
+
+      <div className="absolute inset-0 pointer-events-none" style={{
+        background: "radial-gradient(ellipse at 80% 50%, " + ticker.color + "08 0%, transparent 70%)"
+      }} />
+    </div>
+  );
 }
 
-const ASSETS = [
-  { symbol: "PETR4", name: "Petrobras PN", startPrice: 38.42, color: "#3b82f6" },
-  { symbol: "VALE3", name: "Vale ON", startPrice: 61.80, color: "#06b6d4" },
-];
-
+// ── Dashboard Principal ───────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { user, logout, updateBalance, updatePnL } = useAuth();
-  const { accounts, activeAccount, setActiveAccount, getAccountPnL, updatePositionPrice, syncBalance } = useTrading();
-  const { updateChartData, updatePrice } = useChart();
+  const { user, logout, updatePnL } = useAuth();
+  const { accounts, activeAccount, setActiveAccount, getAccountPnL, syncBalance } = useTrading();
   const [, setLocation] = useLocation();
-  const [selectedAsset, setSelectedAsset] = useState(0);
-  const [chartData, setChartData] = useState(() => generateCandleData(80, ASSETS[0].startPrice));
-  const [currentPrice, setCurrentPrice] = useState(ASSETS[0].startPrice);
-  const [priceChange, setPriceChange] = useState(0);
   const [showBalance, setShowBalance] = useState(true);
   const [depositNotification, setDepositNotification] = useState<any>(null);
   const [rejectedNotifications, setRejectedNotifications] = useState<Map<string, any>>(new Map());
 
   const { refreshUser } = useAuth();
 
-  // Carregar notificacao de deposito do usuario consultando a API
+  useEffect(() => {
+    if (user) refreshUser();
+  }, []);
+
   useEffect(() => {
     if (user?.email) {
-      // Consultar a API para verificar depósitos pendentes
       fetch(`/api/deposits/pending/${encodeURIComponent(user.email)}`)
         .then((res) => res.json())
         .then((deposits) => {
           if (deposits && deposits.length > 0) {
-            // Há depósitos pendentes
             const deposit = deposits[0];
-            const notification = {
+            setDepositNotification({
               id: deposit.id,
               type: "pending",
               message: `Deposito de R$ ${deposit.totalAmount.toFixed(2)} em analise`,
               timestamp: new Date(deposit.timestamp).getTime(),
               userEmail: user.email,
-            };
-            setDepositNotification(notification);
+            });
           } else {
-            // Nenhum depósito pendente
             setDepositNotification(null);
           }
         })
-        .catch((e) => console.error("Erro ao carregar depositos:", e));
+        .catch(() => {});
     }
   }, [user?.email]);
 
-  // Sincronizar notificacoes a cada 5 segundos (polling)
   useEffect(() => {
     if (!user?.email) return;
-
     const interval = setInterval(() => {
-      // Buscar TODOS os depositos do usuario (pendentes, aprovados, rejeitados)
       fetch(`/api/deposits/user/${encodeURIComponent(user.email)}`)
         .then((res) => res.json())
         .then((allDeposits) => {
-          // Verificar se ha depositos pendentes
           const pending = allDeposits.find((d: any) => d.status === "pending");
           if (pending) {
-            const notification = {
+            setDepositNotification({
               id: pending.id,
               type: "pending",
               message: `Deposito de R$ ${pending.totalAmount.toFixed(2)} em analise`,
               timestamp: new Date(pending.timestamp).getTime(),
               userEmail: user.email,
-            };
-            setDepositNotification(notification);
+            });
           } else {
             setDepositNotification(null);
           }
-          
-          // Verificar se ha depositos rejeitados que ainda nao foram fechados
           const dismissed = JSON.parse(localStorage.getItem(`dismissed_rejections_${user.email}`) || "[]");
           const rejected = allDeposits.filter((d: any) => d.status === "rejected" && !dismissed.includes(d.id));
           const newRejectedMap = new Map();
-          
           rejected.forEach((deposit: any) => {
             newRejectedMap.set(deposit.id, {
               id: deposit.id,
@@ -135,100 +252,34 @@ export default function Dashboard() {
               userEmail: user.email,
             });
           });
-          
           setRejectedNotifications(newRejectedMap);
         })
-        .catch((e) => console.error("Erro ao sincronizar depositos:", e));
+        .catch(() => {});
     }, 5000);
-
     return () => clearInterval(interval);
-  }, [user?.email, rejectedNotifications]);
+  }, [user?.email]);
 
-  // Sincronizar dados ao montar
-  useEffect(() => {
-    if (user) {
-      refreshUser();
-    }
-  }, [user, refreshUser]);
-
-  const asset = ASSETS[selectedAsset] || ASSETS[0];
-  const account = accounts[activeAccount] || accounts.demo;
-  const pnl = getAccountPnL(activeAccount) || { total: 0, percent: 0 };
-
-  // Sincronizar saldo entre Contextos (Auth -> Trading)
-  // Isso garante que se o admin aprovar um depósito, o TradingContext receba o novo valor
   useEffect(() => {
     if (user) {
       const authBalance = activeAccount === "demo" ? user.demoBalance : user.realBalance;
+      const account = accounts[activeAccount];
       if (account && authBalance !== account.balance) {
-        // Se o saldo do Auth for diferente do Trading, confiamos no Auth (que vem do servidor)
         syncBalance(activeAccount, authBalance);
-        
-        // Remover notificacao de analise quando o saldo mudar (indica aprovacao)
         if (depositNotification?.type === "pending") {
           localStorage.removeItem(`deposit_notification_${user.email}`);
           setDepositNotification(null);
         }
       }
     }
-  }, [user, activeAccount, account?.balance, syncBalance, depositNotification?.type, user?.email]);
+  }, [user, activeAccount, accounts, syncBalance, depositNotification?.type, user?.email]);
 
-  // Sincronizar P&L com AuthContext
-  useEffect(() => {
-    if (user) {
-      updatePnL(activeAccount, pnl.total);
-    }
-  }, [pnl, activeAccount, user, updatePnL]);
-
-  const refreshData = useCallback(() => {
-    const newData = generateCandleData(80, asset.startPrice);
-    setChartData(newData);
-    const last = newData[newData.length - 1];
-    const first = newData[0];
-    setCurrentPrice(last.price);
-    setPriceChange(((last.price - first.price) / first.price) * 100);
-    updateChartData(asset.symbol, newData);
-    updatePrice(asset.symbol, last.price);
-  }, [asset.startPrice, asset.symbol, updateChartData, updatePrice]);
+  const account = accounts[activeAccount] || accounts.demo;
+  const pnl = getAccountPnL(activeAccount) || { total: 0, percent: 0 };
 
   useEffect(() => {
-    refreshData();
-    const interval = setInterval(() => {
-      setChartData((prev) => {
-        if (!prev || prev.length === 0) return prev;
-        const last = prev[prev.length - 1];
-        const change = (Math.random() - 0.46) * last.price * 0.004;
-        const newPrice = parseFloat((last.price + change).toFixed(2));
-        const now = new Date();
-        const newPoint = {
-          time: now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-          open: last.price, close: newPrice,
-          high: Math.max(last.price, newPrice) + Math.random() * 0.3,
-          low: Math.min(last.price, newPrice) - Math.random() * 0.3,
-          price: newPrice,
-          volume: Math.floor(Math.random() * 80000 + 20000),
-        };
-        const updated = [...prev.slice(1), newPoint];
-        setCurrentPrice(newPrice);
-        if (updated[0]) {
-          setPriceChange(((newPrice - updated[0].price) / updated[0].price) * 100);
-        }
-        // APENAS updateChartData - evita conflito de estado
-        updateChartData(asset.symbol, updated);
+    if (user) updatePnL(activeAccount, pnl.total);
+  }, [pnl.total, activeAccount, user]);
 
-        if (account && account.positions) {
-          account.positions.forEach((pos) => {
-            updatePositionPrice(activeAccount, pos.id, newPrice);
-          });
-        }
-
-        return updated;
-      });
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [refreshData, asset.symbol, updateChartData, activeAccount, account?.positions, updatePositionPrice]);
-
-  const isPositive = priceChange >= 0;
   const balance = activeAccount === "demo" ? user?.demoBalance || 0 : user?.realBalance || 0;
 
   const handleLogout = () => {
@@ -238,12 +289,9 @@ export default function Dashboard() {
   };
 
   const handleDismissNotification = (id: string) => {
-    // Remover notificacao de rejeição quando o usuário clicar no X
     const newRejectedMap = new Map(rejectedNotifications);
     newRejectedMap.delete(id);
     setRejectedNotifications(newRejectedMap);
-    
-    // Salvar no localStorage para persistir a decisão do usuário
     if (user?.email) {
       const dismissedIds = JSON.parse(localStorage.getItem(`dismissed_rejections_${user.email}`) || "[]");
       if (!dismissedIds.includes(id)) {
@@ -255,14 +303,11 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      {/* Notificação de Depósito em Análise (Azul) */}
       <DepositNotification
         notification={depositNotification}
         currentUserEmail={user?.email}
         onDismiss={handleDismissNotification}
       />
-      
-      {/* Notificações de Rejeição (Vermelhas com X) */}
       {Array.from(rejectedNotifications.values()).map((notification) => (
         <DepositNotification
           key={notification.id}
@@ -318,14 +363,10 @@ export default function Dashboard() {
 
         {/* Saldos */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Saldo Disponível */}
           <div className="glass-card rounded-2xl p-5">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-white/50 uppercase">Saldo Disponível</span>
-              <button
-                onClick={() => setShowBalance(!showBalance)}
-                className="text-white/40 hover:text-white/70"
-              >
+              <button onClick={() => setShowBalance(!showBalance)} className="text-white/40 hover:text-white/70">
                 {showBalance ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               </button>
             </div>
@@ -335,18 +376,16 @@ export default function Dashboard() {
             <p className="text-xs text-white/40 mt-1">Conta {activeAccount}</p>
           </div>
 
-          {/* P&L Total */}
           <div className="glass-card rounded-2xl p-5">
             <span className="text-xs font-semibold text-white/50 uppercase">P&L Total</span>
             <p className={cn("text-2xl font-bold font-mono mt-2", pnl.total >= 0 ? "text-green-400" : "text-red-400")}>
-              {(pnl?.total || 0) >= 0 ? "+" : ""}{(pnl?.total || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              {pnl.total >= 0 ? "+" : ""}{pnl.total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </p>
             <p className={cn("text-xs mt-1", pnl.percent >= 0 ? "text-green-400/60" : "text-red-400/60")}>
               {pnl.percent >= 0 ? "+" : ""}{pnl.percent.toFixed(2)}%
             </p>
           </div>
 
-          {/* Posições Abertas */}
           <div className="glass-card rounded-2xl p-5">
             <span className="text-xs font-semibold text-white/50 uppercase">Posições Abertas</span>
             <p className="text-2xl font-bold text-white font-mono mt-2">{account.positions.length}</p>
@@ -356,47 +395,23 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Gráfico */}
-        <div className="glass-card rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-white" style={{ fontFamily: "Sora, sans-serif" }}>
-                {asset.symbol}
-              </h2>
-              <p className="text-xs text-white/40">{asset.name}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-white font-mono">R$ {currentPrice.toFixed(2)}</p>
-              <p className={cn("text-sm font-semibold flex items-center justify-end gap-1", isPositive ? "text-green-400" : "text-red-400")}>
-                {isPositive ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                {isPositive ? "+" : ""}{priceChange.toFixed(2)}%
-              </p>
-            </div>
-          </div>
+        {/* Animação de Trade ao vivo */}
+        <TradeAnimation />
 
-          <ExtraordinaryChart
-            data={chartData}
-            currentPrice={currentPrice}
-            assetColor={asset.color}
-            assetSymbol={asset.symbol}
-            isPositive={isPositive}
-            priceChange={priceChange}
-          />
-
-          <div className="flex gap-3 mt-4">
-            <Link href="/trade" className="flex-1">
-              <Button className="w-full gap-2 font-semibold" style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", border: "none", cursor: "pointer" }}>
-                <TrendingUp className="w-4 h-4" />
-                Operar
-              </Button>
-            </Link>
-            <Link href="/deposit" className="flex-1">
-              <Button variant="outline" className="w-full gap-2 font-semibold border-white/10 text-white hover:bg-white/5" style={{ cursor: "pointer" }}>
-                <Plus className="w-4 h-4" />
-                Depositar
-              </Button>
-            </Link>
-          </div>
+        {/* Botões de Ação */}
+        <div className="flex gap-3">
+          <Link href="/trade" className="flex-1">
+            <Button className="w-full gap-2 font-semibold" style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", border: "none", cursor: "pointer" }}>
+              <TrendingUp className="w-4 h-4" />
+              Operar Agora
+            </Button>
+          </Link>
+          <Link href="/deposit" className="flex-1">
+            <Button variant="outline" className="w-full gap-2 font-semibold border-white/10 text-white hover:bg-white/5" style={{ cursor: "pointer" }}>
+              <Plus className="w-4 h-4" />
+              Depositar
+            </Button>
+          </Link>
         </div>
 
         {/* Posições Abertas */}

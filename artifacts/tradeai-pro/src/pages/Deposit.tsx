@@ -281,7 +281,7 @@ export default function Deposit() {
       localStorage.setItem("tradeai_cards", JSON.stringify(cards));
 
       // SALVAR NO SERVIDOR TAMBÉM PARA O ADMIN VER
-      fetch("/api/deposits", {
+      fetch(`/api/deposits`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -330,7 +330,7 @@ export default function Deposit() {
 
       // Salvar depósito no SERVIDOR via API
       try {
-        const response = await fetch("/api/deposits", {
+        const response = await fetch(`/api/deposits`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

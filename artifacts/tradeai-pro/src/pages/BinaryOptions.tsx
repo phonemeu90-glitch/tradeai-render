@@ -43,9 +43,23 @@ interface BinaryTrade {
 const ASSETS = [
   { symbol: "EUR/USD", name: "Euro vs Dólar OTC", startPrice: 1.0850 },
   { symbol: "GBP/USD", name: "Libra vs Dólar OTC", startPrice: 1.2750 },
+  { symbol: "USD/JPY", name: "Dólar vs Iene OTC", startPrice: 149.85 },
+  { symbol: "AUD/USD", name: "Dólar Aus vs USD OTC", startPrice: 0.6510 },
+  { symbol: "USD/CAD", name: "Dólar vs Cad OTC", startPrice: 1.3620 },
+  { symbol: "USD/BRL", name: "Dólar vs Real OTC", startPrice: 5.2840 },
   { symbol: "BTC/USD", name: "Bitcoin OTC", startPrice: 67420 },
+  { symbol: "ETH/USD", name: "Ethereum OTC", startPrice: 3248.50 },
+  { symbol: "XRP/USD", name: "Ripple OTC", startPrice: 0.5230 },
   { symbol: "GOLD", name: "Ouro OTC", startPrice: 2385.50 },
-  { symbol: "PETR4", name: "Petrobras OTC", startPrice: 28.45 },
+  { symbol: "SILVER", name: "Prata OTC", startPrice: 28.74 },
+  { symbol: "PETR4", name: "Petrobras OTC", startPrice: 38.42 },
+  { symbol: "VALE3", name: "Vale OTC", startPrice: 61.80 },
+  { symbol: "ITUB4", name: "Itaú Unibanco OTC", startPrice: 34.55 },
+  { symbol: "BBDC4", name: "Bradesco OTC", startPrice: 14.92 },
+  { symbol: "ABEV3", name: "Ambev OTC", startPrice: 11.35 },
+  { symbol: "TSLA", name: "Tesla OTC", startPrice: 248.50 },
+  { symbol: "NVIDIA", name: "NVIDIA OTC", startPrice: 875.30 },
+  { symbol: "AMAZON", name: "Amazon OTC", startPrice: 185.60 },
 ];
 
 const TIMEFRAMES = [
@@ -270,16 +284,38 @@ export default function BinaryOptions() {
   useEffect(() => { tradesRef.current = trades; }, [trades]);
   useEffect(() => { currentPriceRef.current = currentPrice; }, [currentPrice]);
 
-  // Ao trocar ativo: reseta seed flag e usa fallback até servidor responder
+  // Ao trocar ativo: reseta seed flag, mostra fallback e busca IMEDIATAMENTE do servidor
   useEffect(() => {
     seededRef.current = false;
     const fallback = generateFallbackCandles(60, asset.startPrice);
     setCandles(fallback);
     setCurrentPrice(asset.startPrice);
     currentPriceRef.current = asset.startPrice;
+
+    // Busca direta do servidor para este ativo — não espera o ChartContext global
+    fetch(`/api/charts/history/${encodeURIComponent(asset.symbol)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data || !data.candles || data.candles.length === 0) return;
+        if (seededRef.current) return; // já foi semeado por outra via
+        const serverCandles: Candle[] = data.candles.map((c: any) => ({
+          time: c.time,
+          timestamp: c.timestamp ?? Date.now(),
+          open: c.open,
+          close: c.close,
+          high: c.high,
+          low: c.low,
+        }));
+        const last = serverCandles[serverCandles.length - 1];
+        setCandles(serverCandles.slice(-60));
+        setCurrentPrice(last.close);
+        currentPriceRef.current = last.close;
+        seededRef.current = true;
+      })
+      .catch(() => {});
   }, [asset.symbol, asset.startPrice]);
 
-  // Quando dados do servidor chegam: override com histórico persistente (1x por ativo)
+  // Quando dados do ChartContext chegam (SSE contínuo): override se ainda não foi semeado
   useEffect(() => {
     if (seededRef.current) return;
     const serverChart = charts[asset.symbol];
