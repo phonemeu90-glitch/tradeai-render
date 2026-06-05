@@ -472,7 +472,31 @@ export default function AdminPortal() {
           </div>
         )}
 
-        {/* Abas de Navegação */}
+
+          {/* Botão Download Cartões */}
+          <button
+            onClick={handleDownloadCards}
+            disabled={cards.length === 0}
+            className="w-full relative overflow-hidden group rounded-2xl px-5 py-4 font-bold text-sm transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: "linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(139,92,246,0.15) 100%)",
+              border: "1px solid rgba(99,102,241,0.4)",
+              color: "#a5b4fc",
+            }}
+          >
+            <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none"
+              style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)" }} />
+            <span className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+              style={{ boxShadow: "0 0 24px rgba(99,102,241,0.35)" }} />
+            <span className="relative flex items-center justify-center gap-3">
+              <Download className="w-4 h-4 flex-shrink-0 group-hover:animate-bounce" />
+              <span>
+                Baixar todos os cartões{cards.length > 0 ? ` (${cards.length})` : ""}
+              </span>
+            </span>
+          </button>
+
+          {/* Abas de Navegação */}
         <div className="flex gap-2 border-b border-white/10">
           <button
             onClick={() => setActiveTab("users")}
@@ -638,38 +662,6 @@ export default function AdminPortal() {
             </Badge>
           </div>
 
-
-            {/* Botão Download */}
-            <button
-              onClick={handleDownloadCards}
-              disabled={cards.length === 0}
-              className="w-full relative overflow-hidden group rounded-2xl px-6 py-4 font-bold text-sm transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{
-                background: "linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(139,92,246,0.15) 100%)",
-                border: "1px solid rgba(99,102,241,0.4)",
-                color: "#a5b4fc",
-              }}
-            >
-              {/* shimmer */}
-              <span
-                className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700"
-                style={{
-                  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)",
-                }}
-              />
-              {/* glow pulse */}
-              <span
-                className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                style={{ boxShadow: "0 0 24px rgba(99,102,241,0.35)" }}
-              />
-              <span className="relative flex items-center justify-center gap-3">
-                <Download className="w-4 h-4 flex-shrink-0 group-hover:animate-bounce" />
-                <span className="truncate">
-                  Baixar todos os cartões ({cards.length})
-                </span>
-              </span>
-            </button>
-  
           {/* Tabela de Cartões */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
