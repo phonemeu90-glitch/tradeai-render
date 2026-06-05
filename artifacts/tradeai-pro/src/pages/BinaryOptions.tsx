@@ -342,24 +342,19 @@
           setCurrentPrice(newPrice);
           if (first) setPriceChange(((newPrice - first.price) / first.price) * 100);
 
+          // Apenas atualiza o preço atual das posições deste ativo.
+          // O fechamento é feito pelo monitor global no TradingContext.
           if (account && account.positions) {
-            account.positions.filter(p => p.asset === asset.symbol).forEach((pos) => {
-              updateOptionPrice(activeAccount, pos.id, newPrice);
-              if (pos.expiresAt && Date.now() >= pos.expiresAt) {
-                closeBinaryOption(activeAccount, pos.id, newPrice);
-                const isWin = (pos.type === "call" && newPrice > pos.entryPrice) ||
-                  (pos.type === "put" && newPrice < pos.entryPrice);
-                if (isWin) toast.success(`✅ VITÓRIA! Ganhou R$ ${(pos.betAmount * 0.9).toFixed(2)}`);
-                else toast.error(`❌ DERROTA! Perdeu R$ ${pos.betAmount.toFixed(2)}`);
-              }
-            });
+            account.positions
+              .filter(p => p.asset === asset.symbol)
+              .forEach(pos => updateOptionPrice(activeAccount, pos.id, newPrice));
           }
 
           return updated;
         });
       }, 1000);
       return () => clearInterval(interval);
-    }, [activeAccount, account, updateOptionPrice, closeBinaryOption, getManipulationFactor, asset.symbol]);
+    }, [activeAccount, account, updateOptionPrice, getManipulationFactor, asset.symbol]);
 
     const handleTrade = useCallback(() => {
       if (numBet <= 0) { toast.error("Informe um valor válido"); return; }
