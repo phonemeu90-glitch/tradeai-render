@@ -20,30 +20,47 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 // Fallback local — idêntico ao original
-function generatePriceData(points: number, startPrice: number) {
-  const data = [];
-  let price = startPrice;
-  const now = new Date();
-  for (let i = points; i >= 0; i--) {
-    const time = new Date(now.getTime() - i * 1000);
-    const u1 = Math.random(), u2 = Math.random();
-    const noise = Math.sqrt(-2 * Math.log(Math.max(u1, 1e-10))) * Math.cos(2 * Math.PI * u2);
-    const move = price * 0.004 * noise * 0.4;
-    const open = price;
-    const close = parseFloat((open + move).toFixed(4));
-    const wickSize = Math.abs(move) * (0.3 + Math.random() * 0.4);
-    data.push({
-      time: time.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-      open, close,
-      high: parseFloat((Math.max(open, close) + wickSize).toFixed(4)),
-      low: parseFloat((Math.min(open, close) - Math.max(wickSize * 0.5, 0.0001)).toFixed(4)),
-      price: close,
-      volume: Math.floor(Math.random() * 80000 + 20000),
-    });
-    price = close;
+// PRNG com semente — mesmo símbolo + mesma hora = mesmo gráfico inicial (não muda ao atualizar)
+  function hashStr(s: string): number {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = Math.imul(31, h) + s.charCodeAt(i) | 0;
+    return h >>> 0;
   }
-  return data;
-}
+  function mulberry32(seed: number) {
+    let s = seed;
+    return () => {
+      s |= 0; s = s + 0x6D2B79F5 | 0;
+      let t = Math.imul(s ^ s >>> 15, 1 | s);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function generatePriceData(points: number, startPrice: number, symbol = "default") {
+    const data = [];
+    let price = startPrice;
+    const now = new Date();
+    const hourBucket = Math.floor(Date.now() / 3600000);
+    const rng = mulberry32(hashStr(symbol + ":" + hourBucket));
+    for (let i = points; i >= 0; i--) {
+      const time = new Date(now.getTime() - i * 1000);
+      const u1 = Math.max(rng(), 1e-10), u2 = rng();
+      const noise = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      const move = price * 0.004 * noise * 0.4;
+      const open = price;
+      const close = parseFloat((open + move).toFixed(4));
+      const wickSize = Math.abs(move) * (0.3 + rng() * 0.4);
+      data.push({
+        time: time.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        open, close,
+        high: parseFloat((Math.max(open, close) + wickSize).toFixed(4)),
+        low: parseFloat((Math.min(open, close) - Math.max(wickSize * 0.5, 0.0001)).toFixed(4)),
+        price: close,
+        volume: Math.floor(rng() * 80000 + 20000),
+      });
+      price = close;
+    }
+    return data;
+  }
 
 // ── 40 ativos OTC — cada um com tema visual distinto ─────────────────────────
 const ASSETS = [
@@ -242,10 +259,10 @@ export default function Trade() {
       const storedRaw = localStorage.getItem(`tradeai_chart_v2_${sym}`);
       if (storedRaw) {
         const stored = JSON.parse(storedRaw);
-        if (stored.symbol === sym && stored.data?.length > 0 && Date.now() - stored.savedAt < 600000) return stored.data;
+        if (stored.symbol === sym && stored.data?.length > 0 && Date.now() - stored.savedAt < 3600000) return stored.data;
       }
     } catch { /* ignorar */ }
-    return generatePriceData(80, ASSETS[safeIdx].startPrice);
+    return generatePriceData(80, ASSETS[safeIdx].startPrice, ASSETS[safeIdx].symbol);
   });
   const [currentPrice, setCurrentPrice] = useState(() => {
     const saved = localStorage.getItem("tradeai_trade_asset");
@@ -274,7 +291,7 @@ export default function Trade() {
       const storedRaw = localStorage.getItem(`tradeai_chart_v2_${asset.symbol}`);
       if (storedRaw) {
         const stored = JSON.parse(storedRaw);
-        if (stored.symbol === asset.symbol && stored.data?.length > 0 && Date.now() - stored.savedAt < 600000) {
+        if (stored.symbol === asset.symbol && stored.data?.length > 0 && Date.now() - stored.savedAt < 3600000) {
           setChartData(stored.data);
           setCurrentPrice(stored.data[stored.data.length - 1].price);
           setPriceChange(0);
@@ -282,7 +299,7 @@ export default function Trade() {
         }
       }
     } catch { /* ignorar */ }
-    const fallback = generatePriceData(80, asset.startPrice);
+    const fallback = generatePriceData(80, asset.startPrice, asset.symbol);
     setChartData(fallback);
     setCurrentPrice(asset.startPrice);
     setPriceChange(0);
@@ -357,7 +374,7 @@ export default function Trade() {
         const updated = appended.length > 2000 ? appended.slice(-2000) : appended;
 
         saveCounterRef.current++;
-        if (saveCounterRef.current % 30 === 0) {
+        if (saveCounterRef.current % 5 === 0) {
           try {
             localStorage.setItem(`tradeai_chart_v2_${asset.symbol}`, JSON.stringify({
               symbol: asset.symbol, data: updated.slice(-300), savedAt: Date.now(),
