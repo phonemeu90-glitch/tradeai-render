@@ -160,7 +160,7 @@ export default function ProfessionalChart({
   const [hoverCandle, setHoverCandle] = useState<(CandleData & { x: number; y: number }) | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const TF_ZOOM: Record<string, number> = { "1m": 1, "5m": 2, "15m": 3, "30m": 4, "1h": 5 };
+  const TF_ZOOM: Record<string, number> = { "1m": 5, "5m": 4, "15m": 3, "30m": 2, "1h": 1 };
   const handleZoomIn  = () => setZoomLevel(p => Math.min(p + 0.5, 8));
   const handleZoomOut = () => setZoomLevel(p => Math.max(p - 0.5, 0.3));
   const handleReset   = () => { setZoomLevel(1); setScrollOffset(0); };
