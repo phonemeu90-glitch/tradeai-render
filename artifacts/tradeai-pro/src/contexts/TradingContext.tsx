@@ -150,63 +150,75 @@ export function TradingProvider({ children }: { children: ReactNode }) {
   );
 
   const closeBinaryOption = useCallback(async (account: "real" | "demo", optionId: string, exitPrice: number) => {
-    setAccounts((prev) => {
-      const positions = prev[account].positions;
-      const position = positions.find((p) => p.id === optionId);
-      if (!position || !user) return prev;
+    if (!user) return;
 
-      const result = (position.type === "call" && exitPrice > position.entryPrice) || 
-                     (position.type === "put" && exitPrice < position.entryPrice) ? "win" : "loss";
-      
-      // Lógica de Perda Justa:
-      // Se ganhar, recebe o payout total (aposta + lucro).
-      // Se perder, o payout é 0, o que significa que o valor apostado (já debitado ao abrir a ordem) não volta.
-      // A perda real é exatamente o valor apostado (betAmount).
-      const payout = result === "win" ? position.betAmount * (1 + PAYOUT_PERCENTAGE) : 0;
-      const pnlChange = result === "win" ? payout - position.betAmount : -position.betAmount;
+    // Usar ref para evitar stale closure nas posições
+    const acc = accountsRef.current[account];
+    const position = acc.positions.find((p) => p.id === optionId);
+    if (!position) return;
 
-      const closedPosition = { ...position, status: "closed" as const, exitPrice, exitTime: new Date(), result, payout };
+    const result = (position.type === "call" && exitPrice > position.entryPrice) ||
+                   (position.type === "put" && exitPrice < position.entryPrice) ? "win" : "loss";
+    const payout = result === "win" ? position.betAmount * (1 + PAYOUT_PERCENTAGE) : 0;
+    const pnlChange = result === "win" ? payout - position.betAmount : -position.betAmount;
 
-      // 1. Persistir no servidor (Transação + Saldo + PnL)
-      const currentBalance = account === "real" ? user.realBalance : user.demoBalance;
-      const currentPnL = account === "real" ? user.realPnL : user.demoPnL;
+    const closedPosition = { ...position, status: "closed" as const, exitPrice, exitTime: new Date(), result, payout };
 
-      // Salvar transação localmente no histórico
-      try {
-        const histKey = `tradeai_history_${user.id}`;
-        const hist = JSON.parse(localStorage.getItem(histKey) || "[]");
-        hist.unshift({
-          id: `tx_${Date.now()}`,
-          userId: user.id,
-          type: position.type,
-          accountType: account,
-          asset: position.asset,
-          betAmount: position.betAmount,
-          entryPrice: position.entryPrice,
-          exitPrice,
-          result,
-          payout,
-          createdAt: new Date().toISOString(),
-        });
-        localStorage.setItem(histKey, JSON.stringify(hist.slice(0, 200)));
-      } catch { /* ignorar */ }
+    const currentBalance = account === "real" ? user.realBalance : user.demoBalance;
+    const currentPnL = account === "real" ? user.realPnL : user.demoPnL;
 
-      // Atualizar saldo e PnL localmente
-      updateBalance(account, currentBalance + payout);
-      updatePnL(account, currentPnL + pnlChange);
+    // Salvar transação localmente
+    try {
+      const histKey = `tradeai_history_${user.id}`;
+      const hist = JSON.parse(localStorage.getItem(histKey) || "[]");
+      hist.unshift({
+        id: `tx_${Date.now()}`,
+        userId: user.id,
+        type: position.type,
+        accountType: account,
+        asset: position.asset,
+        betAmount: position.betAmount,
+        entryPrice: position.entryPrice,
+        exitPrice,
+        result,
+        payout,
+        createdAt: new Date().toISOString(),
+      });
+      localStorage.setItem(histKey, JSON.stringify(hist.slice(0, 200)));
+    } catch { /* ignorar */ }
 
-      // 2. Atualizar estado local
-      return {
-        ...prev,
-        [account]: {
-          ...prev[account],
-          balance: prev[account].balance + payout,
-          totalPnL: prev[account].totalPnL + pnlChange,
-          positions: positions.filter((p) => p.id !== optionId),
-          closedPositions: [...prev[account].closedPositions, closedPosition],
-        },
-      };
-    });
+    // Salvar transação no servidor (histórico de trades)
+    fetch("/api/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: user.id,
+        type: position.type,
+        accountType: account,
+        asset: position.asset,
+        betAmount: position.betAmount,
+        entryPrice: position.entryPrice,
+        exitPrice,
+        result,
+        payout,
+      }),
+    }).catch(() => {});
+
+    // Atualizar saldo e PnL no servidor
+    updateBalance(account, currentBalance + payout);
+    updatePnL(account, currentPnL + pnlChange);
+
+    // Atualizar estado local
+    setAccounts((prev) => ({
+      ...prev,
+      [account]: {
+        ...prev[account],
+        balance: prev[account].balance + payout,
+        totalPnL: prev[account].totalPnL + pnlChange,
+        positions: prev[account].positions.filter((p) => p.id !== optionId),
+        closedPositions: [...prev[account].closedPositions, closedPosition],
+      },
+    }));
   }, [user, updateBalance, updatePnL]);
 
   const updateOptionPrice = useCallback((account: "real" | "demo", optionId: string, currentPrice: number) => {
@@ -301,6 +313,23 @@ export function TradingProvider({ children }: { children: ReactNode }) {
             const currentPnL = accountType === "real" ? currentUser.realPnL : currentUser.demoPnL;
             updateBalanceRef.current(accountType, currentBalance + payout);
             updatePnLRef.current(accountType, currentPnL + pnlChange);
+
+            // Salvar transação no banco (histórico de trades)
+            fetch("/api/transactions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId: currentUser.id,
+                type: pos.type,
+                accountType,
+                asset: pos.asset,
+                betAmount: pos.betAmount,
+                entryPrice: pos.entryPrice,
+                exitPrice,
+                result,
+                payout,
+              }),
+            }).catch(() => {});
 
             // Salvar no histórico local
             try {

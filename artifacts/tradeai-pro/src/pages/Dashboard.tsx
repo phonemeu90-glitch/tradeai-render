@@ -288,6 +288,29 @@ export default function Dashboard() {
     toast.success("Deslogado com sucesso");
   };
 
+  const handleDemoReset = async () => {
+    if (!user) return;
+    try {
+      await Promise.all([
+        fetch(`/api/users/${user.id}/balance`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "demo", amount: 1000 }),
+        }),
+        fetch(`/api/users/${user.id}/pnl`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "demo", amount: 0 }),
+        }),
+      ]);
+      syncBalance("demo", 1000);
+      refreshUser();
+      toast.success("Conta demo renovada! Saldo: R$ 1.000,00");
+    } catch {
+      toast.error("Erro ao renovar conta demo");
+    }
+  };
+
   const handleDismissNotification = (id: string) => {
     const newRejectedMap = new Map(rejectedNotifications);
     newRejectedMap.delete(id);
@@ -344,7 +367,7 @@ export default function Dashboard() {
         </div>
 
         {/* Account Selector */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap items-center">
           {["demo", "real"].map((acc) => (
             <button
               key={acc}
@@ -359,6 +382,15 @@ export default function Dashboard() {
               {acc === "demo" ? "📚 Conta Demo" : "💰 Conta Real"}
             </button>
           ))}
+          {activeAccount === "demo" && (
+            <button
+              onClick={handleDemoReset}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-yellow-400 border border-yellow-500/20 hover:bg-yellow-500/10 transition-all"
+              title="Renovar saldo da conta demo para R$ 1.000,00"
+            >
+              🔄 Renovar Demo
+            </button>
+          )}
         </div>
 
         {/* Saldos */}

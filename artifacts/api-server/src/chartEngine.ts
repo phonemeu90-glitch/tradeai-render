@@ -22,6 +22,12 @@ import { EventEmitter } from "events";
   const BASE_VOLATILITY = 0.004;
 
   /*
+   * Volatilidade natural: clustering (períodos calmos/voláteis) + spikes ocasionais.
+   * Cada candle tem seu próprio fator de volatilidade derivado do PRNG —
+   * nunca toca na lógica de manipulação de trades, apenas no ruído do gráfico.
+   */
+
+  /*
    * ── PRNG DETERMINÍSTICO ────────────────────────────────────────────────────
    * Mesma lógica do fallback do cliente (Trade.tsx).
    * seed = hash(symbol + ":" + hourBucket) → mesmo símbolo + mesma hora = mesmo gráfico.
@@ -117,14 +123,20 @@ import { EventEmitter } from "events";
 
     for (let i = count; i >= 0; i--) {
       const timestamp = now - i * 1000;
-      const noise   = gaussianSeeded(rng);
-      const wickVal = rng();
-      const volVal  = rng();
+      const noise    = gaussianSeeded(rng);
+      const wickVal  = rng();
+      const volVal   = rng();
+      const volScale = rng();   // clustering: 0 = calmo, 1 = volátil
+      const spikeRaw = rng();   // spike ocasional
 
-      const move = price * BASE_VOLATILITY * noise * 0.4;
+      const isSpike    = spikeRaw < 0.04;
+      const spikeMult  = isSpike ? (2.4 + rng() * 1.6) : 1.0;
+      const effectiveFactor = 0.4 * (0.15 + volScale * 1.7) * spikeMult;
+
+      const move = price * BASE_VOLATILITY * noise * effectiveFactor;
       const open = price;
       const close = parseFloat((open + move).toFixed(4));
-      const wickSize = Math.abs(move) * (0.3 + wickVal * 0.4);
+      const wickSize = Math.abs(move) * (0.3 + wickVal * 0.5);
 
       history.push({
         time: new Date(timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -148,14 +160,20 @@ import { EventEmitter } from "events";
    */
   function nextCandleSeeded(symbol: string, last: ServerCandle, timestamp: number): ServerCandle {
     const rng = mulberry32(hashStr(symbol + ":" + Math.floor(timestamp / 1000)));
-    const noise   = gaussianSeeded(rng);
-    const wickVal = rng();
-    const volVal  = rng();
+    const noise    = gaussianSeeded(rng);
+    const wickVal  = rng();
+    const volVal   = rng();
+    const volScale = rng();   // clustering de volatilidade
+    const spikeRaw = rng();   // spike ocasional (~4%)
 
-    const move = last.price * BASE_VOLATILITY * noise * 0.4;
+    const isSpike   = spikeRaw < 0.04;
+    const spikeMult = isSpike ? (2.4 + rng() * 1.6) : 1.0;
+    const effectiveFactor = 0.4 * (0.15 + volScale * 1.7) * spikeMult;
+
+    const move  = last.price * BASE_VOLATILITY * noise * effectiveFactor;
     const open  = last.close;
     const close = parseFloat((open + move).toFixed(4));
-    const wickSize = Math.abs(move) * (0.3 + wickVal * 0.4);
+    const wickSize = Math.abs(move) * (0.3 + wickVal * 0.5);
 
     return {
       time: new Date(timestamp).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
