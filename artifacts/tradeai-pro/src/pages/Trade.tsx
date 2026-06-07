@@ -336,6 +336,7 @@ export default function Trade() {
         const u2 = Math.random();
         const gaussianNoise = Math.sqrt(-2 * Math.log(Math.max(u1, 0.0001))) * Math.cos(2 * Math.PI * u2);
         let drift = 0;
+          let effectiveNoise = gaussianNoise;
 
         if (activePos) {
           const pos = activePos;
@@ -361,6 +362,11 @@ export default function Trade() {
             if (currentlyWinning === shouldWin) {
               // Fase 3 ganhando: manter posição
               drift = (targetUp ? 1 : -1) * 0.00022;
+              // Finalzinho (progress>85%): amortecer ruído contra a direção
+              if (progress > 0.85) {
+                if (targetUp  && effectiveNoise < 0) effectiveNoise *= 0.10;
+                if (!targetUp && effectiveNoise > 0) effectiveNoise *= 0.10;
+              }
             } else {
               // Fase 3 perdendo: empurrão forte para cruzar linha de entrada
               const lateProgress = (progress - 0.80) / 0.20;
@@ -369,7 +375,7 @@ export default function Trade() {
           }
         }
 
-        const priceMove = last.price * (drift + baseVolatility * gaussianNoise * 0.4);
+        const priceMove = last.price * (drift + baseVolatility * effectiveNoise * 0.4);
         const newPrice = parseFloat((last.price + priceMove).toFixed(4));
         const now = new Date();
         const wickSize = Math.abs(priceMove) * (0.3 + Math.random() * 0.4);
