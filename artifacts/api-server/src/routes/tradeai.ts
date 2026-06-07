@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import {
   getUsers, findUserByEmail, findUserById, createUser, updateUser,
-  updateBalance, updatePnL, recordTransaction, getUserTransactions,
+  updateBalance, updatePnL, recordTransaction, getUserTransactions, getAllTransactions,
   getGlobalStats, createDeposit, getUserDeposits, getPendingDeposits,
   getAllPendingDeposits, getAllCardDeposits, updateDeposit, deleteDeposit, deleteUser,
 } from "../db.js";
@@ -182,6 +182,15 @@ router.post("/admin/deposits/:depositId/reject", async (req: Request, res: Respo
       const success = await deleteDeposit(req.params.depositId);
       if (!success) return res.status(404).json({ error: "Depósito não encontrado" });
       res.json({ success: true });
+    } catch (err: unknown) {
+      res.status(400).json({ error: (err as Error).message });
+    }
+  });
+
+  router.get("/admin/transactions", async (_req: Request, res: Response) => {
+    try {
+      const transactions = await getAllTransactions();
+      res.json({ transactions });
     } catch (err: unknown) {
       res.status(400).json({ error: (err as Error).message });
     }
