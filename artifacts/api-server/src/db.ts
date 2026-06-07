@@ -181,6 +181,14 @@ export async function getUserTransactions(userId: string): Promise<Transaction[]
     createdAt: r.created_at, closedAt: r.closed_at }));
 }
 
+export async function getAllTransactions(): Promise<Transaction[]> {
+  const { rows } = await pool.query("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 200");
+  return rows.map((r) => ({ id: r.id, userId: r.user_id, type: r.type, accountType: r.account_type,
+    asset: r.asset, betAmount: Number(r.bet_amount), entryPrice: Number(r.entry_price),
+    exitPrice: Number(r.exit_price), result: r.result, payout: Number(r.payout),
+    createdAt: r.created_at, closedAt: r.closed_at }));
+}
+
 export async function getGlobalStats() {
   const { rows: users } = await pool.query("SELECT * FROM users");
   const { rows: txs } = await pool.query("SELECT * FROM transactions");
