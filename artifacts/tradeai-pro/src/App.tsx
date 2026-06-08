@@ -18,6 +18,7 @@ import Deposit from "./pages/Deposit";
 import Trade from "./pages/Trade";
 import BinaryOptions from "./pages/BinaryOptions";
 import Withdrawal from "./pages/Withdrawal";
+import Saque from "./pages/Saque";
 import Terms from "./pages/Terms";
 import Login from "./pages/Login";
 import History from "./pages/History";
@@ -76,6 +77,14 @@ function Router() {
         {() => (
           <ProtectedRoute>
             <Withdrawal />
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/saque">
+        {() => (
+          <ProtectedRoute>
+            <Saque />
           </ProtectedRoute>
         )}
       </Route>

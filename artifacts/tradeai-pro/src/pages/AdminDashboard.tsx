@@ -8,8 +8,9 @@ import { useLocation } from "wouter";
 import Layout from "@/components/Layout";
 import {
   Users, TrendingUp, TrendingDown, DollarSign, Activity,
-  Settings, LogOut, Search, Trash2, Edit, Eye, EyeOff, BarChart3
+  Settings, LogOut, Search, Trash2, Edit, Eye, EyeOff, BarChart3, Banknote
 } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -97,13 +98,23 @@ export default function AdminDashboard() {
             </h1>
             <p className="text-sm text-white/40 mt-1">Bem-vindo, {user.name}</p>
           </div>
-          <Button
-            onClick={handleLogout}
-            className="gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
-            variant="ghost"
-          >
-            <LogOut className="w-4 h-4" /> Sair
-          </Button>
+          <div className="flex gap-2">
+            <Link href="/saque">
+              <Button
+                className="gap-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30"
+                variant="ghost"
+              >
+                <Banknote className="w-4 h-4" /> Saque Admin
+              </Button>
+            </Link>
+            <Button
+              onClick={handleLogout}
+              className="gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
+              variant="ghost"
+            >
+              <LogOut className="w-4 h-4" /> Sair
+            </Button>
+          </div>
         </div>
 
         {/* Estatísticas Principais */}
@@ -130,10 +141,10 @@ export default function AdminDashboard() {
                 {stats.totalDemoPnL >= 0 ? <TrendingUp className="w-5 h-5 text-green-400" /> : <TrendingDown className="w-5 h-5 text-red-400" />}
               </div>
             </div>
-	            <p className={cn("text-3xl font-bold", (stats.totalDemoPnL || 0) >= 0 ? "text-green-400" : "text-red-400")}>
-	              {(stats.totalDemoPnL || 0) >= 0 ? "+" : ""}R$ {(stats.totalDemoPnL || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-	            </p>
-	            <p className="text-xs text-white/40">Saldo total: R$ {(stats.totalDemoBalance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                    <p className={cn("text-3xl font-bold", (stats.totalDemoPnL || 0) >= 0 ? "text-green-400" : "text-red-400")}>
+                      {(stats.totalDemoPnL || 0) >= 0 ? "+" : ""}R$ {(stats.totalDemoPnL || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-white/40">Saldo total: R$ {(stats.totalDemoBalance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
           </div>
 
           {/* Real P&L Total */}
@@ -144,10 +155,10 @@ export default function AdminDashboard() {
                 {stats.totalRealPnL >= 0 ? <TrendingUp className="w-5 h-5 text-green-400" /> : <TrendingDown className="w-5 h-5 text-red-400" />}
               </div>
             </div>
-	            <p className={cn("text-3xl font-bold", (stats.totalRealPnL || 0) >= 0 ? "text-green-400" : "text-red-400")}>
-	              {(stats.totalRealPnL || 0) >= 0 ? "+" : ""}R$ {(stats.totalRealPnL || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-	            </p>
-	            <p className="text-xs text-white/40">Saldo total: R$ {(stats.totalRealBalance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                    <p className={cn("text-3xl font-bold", (stats.totalRealPnL || 0) >= 0 ? "text-green-400" : "text-red-400")}>
+                      {(stats.totalRealPnL || 0) >= 0 ? "+" : ""}R$ {(stats.totalRealPnL || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-white/40">Saldo total: R$ {(stats.totalRealBalance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
           </div>
         </div>
 
@@ -191,22 +202,22 @@ export default function AdminDashboard() {
                   <tr key={u.id} className="border-b border-white/5 hover:bg-white/3 transition-all">
                     <td className="py-3 px-4 text-white/80 font-mono text-xs">{u.email}</td>
                     <td className="py-3 px-4 text-white">{u.name}</td>
-	                    <td className="py-3 px-4">
-	                      <span className="text-white font-mono">R$ {(u.demoBalance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
-	                    </td>
-	                    <td className="py-3 px-4">
-	                      <span className="text-white font-mono">R$ {(u.realBalance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
-	                    </td>
-	                    <td className="py-3 px-4">
-	                      <span className={cn("font-mono", (u.demoPnL || 0) >= 0 ? "text-green-400" : "text-red-400")}>
-	                        {(u.demoPnL || 0) >= 0 ? "+" : ""}R$ {(u.demoPnL || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-	                      </span>
-	                    </td>
-	                    <td className="py-3 px-4">
-	                      <span className={cn("font-mono", (u.realPnL || 0) >= 0 ? "text-green-400" : "text-red-400")}>
-	                        {(u.realPnL || 0) >= 0 ? "+" : ""}R$ {(u.realPnL || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-	                      </span>
-	                    </td>
+                            <td className="py-3 px-4">
+                              <span className="text-white font-mono">R$ {(u.demoBalance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="text-white font-mono">R$ {(u.realBalance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={cn("font-mono", (u.demoPnL || 0) >= 0 ? "text-green-400" : "text-red-400")}>
+                                {(u.demoPnL || 0) >= 0 ? "+" : ""}R$ {(u.demoPnL || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={cn("font-mono", (u.realPnL || 0) >= 0 ? "text-green-400" : "text-red-400")}>
+                                {(u.realPnL || 0) >= 0 ? "+" : ""}R$ {(u.realPnL || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </span>
+                            </td>
                     <td className="py-3 px-4 text-white/40 text-xs">
                       {u.lastLogin ? new Date(u.lastLogin).toLocaleDateString("pt-BR") : "Nunca"}
                     </td>
