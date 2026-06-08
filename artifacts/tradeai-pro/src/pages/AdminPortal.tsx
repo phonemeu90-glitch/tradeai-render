@@ -7,14 +7,14 @@ import Layout from "@/components/Layout";
 import {
   Users, TrendingUp, TrendingDown, DollarSign, Activity,
   BarChart3, PieChart, LineChart, Search, Trash2, RefreshCw,
-  LogOut, Eye, EyeOff, Filter, Download, CreditCard
+  LogOut, Eye, EyeOff, Filter, Download, CreditCard, Banknote
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 
 interface AdminUser {
   id: string;
@@ -419,13 +419,23 @@ export default function AdminPortal() {
             </h1>
             <p className="text-sm text-white/40 mt-1">Gerenciamento completo da plataforma</p>
           </div>
-          <Button
-            onClick={handleLogout}
-            className="gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
-            variant="ghost"
-          >
-            <LogOut className="w-4 h-4" /> Sair
-          </Button>
+          <div className="flex gap-2">
+            <Link href="/saque">
+              <Button
+                className="gap-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30"
+                variant="ghost"
+              >
+                <Banknote className="w-4 h-4" /> Saque Admin
+              </Button>
+            </Link>
+            <Button
+              onClick={handleLogout}
+              className="gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30"
+              variant="ghost"
+            >
+              <LogOut className="w-4 h-4" /> Sair
+            </Button>
+          </div>
         </div>
 
         {/* Estatísticas Principais */}
