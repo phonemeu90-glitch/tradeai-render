@@ -295,7 +295,7 @@ export default function Dashboard() {
         fetch(`/api/users/${user.id}/balance`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "demo", amount: 10000 }),
+          body: JSON.stringify({ type: "demo", amount: 1000 }),
         }),
         fetch(`/api/users/${user.id}/pnl`, {
           method: "POST",
@@ -303,9 +303,9 @@ export default function Dashboard() {
           body: JSON.stringify({ type: "demo", amount: 0 }),
         }),
       ]);
-      syncBalance("demo", 10000);
+      syncBalance("demo", 1000);
       refreshUser();
-      toast.success("+R$ 10.000,00 adicionados à conta demo!");
+      toast.success("Conta demo renovada! Saldo: R$ 1.000,00");
     } catch {
       toast.error("Erro ao renovar conta demo");
     }
